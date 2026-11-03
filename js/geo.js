@@ -100,7 +100,7 @@
         });
       });
       photos.forEach(p => {
-        if (!p.place || !done.has(p.tripId)) return;
+        if (!p.place || p.kind === 'guide' || !done.has(p.tripId)) return;
         add(p.place, p.tripId); if (p.place.startsWith('jp:')) add('w:JP', p.tripId);
       });
       if ([...planned].some(k => k.startsWith('jp:'))) planned.add('w:JP');

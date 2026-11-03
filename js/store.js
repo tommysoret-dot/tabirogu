@@ -96,20 +96,22 @@
     },
 
     /* ---------- ZIP ---------- */
-    async exportZip(onProgress) {
+    async exportZip(onProgress, tripIds) {
       const zip = new JSZip();
-      const data = { format: 'tabriogu', version: 1, exportedAt: new Date().toISOString(), bookName: this.settings.bookName, covers: this.settings.covers, trips: this.trips, photos: this.photos };
+      const only = tripIds ? new Set(tripIds) : null;
+      const trips = only ? this.trips.filter(t => only.has(t.id)) : this.trips;
+      const photos = only ? this.photos.filter(p => only.has(p.tripId)) : this.photos;
+      const data = { format: 'tabriogu', version: 2, exportedAt: new Date().toISOString(), bookName: this.settings.bookName, covers: only ? {} : this.settings.covers, trips, photos };
       zip.file('tabriogu.json', JSON.stringify(data, null, 1));
       const dir = zip.folder('photos');
       let i = 0;
-      for (const p of this.photos) {
+      for (const p of photos) {
         const b = await this.getBlob(p.id);
         if (b) { dir.file(p.id + '.jpg', b.full); dir.file(p.id + '_t.jpg', b.thumb); }
-        onProgress && onProgress(++i / Math.max(1, this.photos.length) * .7);
+        onProgress && onProgress(++i / Math.max(1, photos.length) * .7);
       }
       const blob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }, m => onProgress && onProgress(.7 + m.percent / 100 * .3));
-      this.settings.lastExport = Date.now();
-      await this.saveSettings();
+      if (!only) { this.settings.lastExport = Date.now(); await this.saveSettings(); }
       return blob;
     },
     async readZip(file) {

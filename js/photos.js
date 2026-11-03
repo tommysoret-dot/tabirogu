@@ -70,5 +70,19 @@
     return `${+y}年${+m}月 ` + (names.length ? names.join('・') + 'の旅' : 'の旅');
   }
 
-  TB.Photos = { processFile, group, localDate };
+  /* resize any image blob (e.g. images embedded in a KOZYBOOK html) */
+  async function resizeBlob(blob) {
+    const img = await decode(blob);
+    const full = await toBlob(img, FULL, .85), thumb = await toBlob(img, THUMB, .8);
+    if (img.close) img.close();
+    return { full: full.blob, thumb: thumb.blob, w: full.w, h: full.h };
+  }
+  function dataUrlToBlob(u) {
+    const m = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(u); if (!m) return null;
+    if (!m[2]) return new Blob([decodeURIComponent(m[3])], { type: m[1] || 'application/octet-stream' });
+    const bin = atob(m[3]); const a = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    return new Blob([a], { type: m[1] || 'image/jpeg' });
+  }
+  TB.Photos = { processFile, group, localDate, resizeBlob, dataUrlToBlob };
 })();

@@ -70,7 +70,7 @@
   /* ---------- cover photo for a place ---------- */
   function photosOfPlace(key, onlyDone = true) {
     const done = new Set(Store.trips.filter(t => t.status === 'done').map(t => t.id));
-    return Store.photos.filter(p => (!onlyDone || done.has(p.tripId)) && (p.place === key || (key === 'w:JP' && p.place && p.place.startsWith('jp:'))))
+    return Store.photos.filter(p => p.kind !== 'guide' && (!onlyDone || done.has(p.tripId)) && (p.place === key || (key === 'w:JP' && p.place && p.place.startsWith('jp:'))))
       .sort((a, b) => b.takenAt - a.takenAt);
   }
   function coverFor(key) {
@@ -222,7 +222,8 @@
         </div>
       </div>
       ${list.length ? `<div class="trip-list">${list.map(t => {
-      const n = Store.photos.filter(p => p.tripId === t.id).length;
+      const n = Store.photos.filter(p => p.tripId === t.id && p.kind !== 'guide').length;
+      const sp = (t.guide && t.guide.spots || []).length;
       const places = (t.places || []).slice(0, 3).map(k => Geo.placeName(k)).join('・');
       return `<button class="ticket tape" data-trip="${t.id}">
           <div class="cover" data-cov="${t.coverPhotoId || ''}">${t.coverPhotoId ? '' : (t.status === 'plan' ? 'これから' : 'no photo')}</div>
@@ -230,7 +231,7 @@
             <div class="date">${fmtRange(t.startDate, t.endDate)}</div>
             <h3>${esc(t.title || '無題の旅')}</h3>
             <div class="muted" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(places)}</div>
-            <div class="meta"><span class="badge ${t.status}">${t.status === 'done' ? '実績' : '予定'}</span>${t.sample ? '<span class="badge sample">サンプル</span>' : ''}<span>${n}枚</span><span>${nights(t.startDate, t.endDate)}</span></div>
+            <div class="meta"><span class="badge ${t.status}">${t.status === 'done' ? '実績' : '予定'}</span>${t.sample ? '<span class="badge sample">サンプル</span>' : ''}<span>${n}枚</span>${sp ? `<span>スポット${sp}</span>` : ''}<span>${nights(t.startDate, t.endDate)}</span></div>
           </div></button>`;
     }).join('')}</div>` : emptyTrips()}`;
     v.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.tripFilter = b.dataset.f; renderTrips(); });
@@ -247,10 +248,12 @@
       <div class="row" style="justify-content:center"><button class="btn primary" data-import>${I.camera} 写真から旅をつくる</button><button class="btn" data-sample>サンプルで試す</button></div></div>`;
   }
 
-  /* ================= TRIP DETAIL ================= */
-  async function openTrip(id) {
+  /* ================= TRIP DETAIL (しおり) ================= */
+  async function openTrip(id, tab) {
     const t = Store.trips.find(x => x.id === id); if (!t) return;
-    const photos = Store.photos.filter(p => p.tripId === id).sort((a, b) => a.takenAt - b.takenAt);
+    TB.Guide.ensure(t);
+    let cur = tab || state.tripTab || 'guide';
+    const memories = () => Store.photos.filter(p => p.tripId === id && p.kind !== 'guide').sort((a, b) => a.takenAt - b.takenAt);
     const pg = page(t.title || '無題の旅', `
       <div class="trip-hero tape">
         <div class="t">
@@ -260,24 +263,51 @@
         </div>
         ${t.status === 'done' ? '<div class="stampmark">旅の<br>記録</div>' : '<div class="stampmark" style="border-style:dashed">旅の<br>計画</div>'}
       </div>
-      <div class="row"><button class="btn primary" data-act="photos">${I.camera} 写真を追加</button><button class="btn" data-act="edit">${I.edit} 編集</button>
+      <div class="row"><button class="btn primary" data-act="photos">${I.camera} 写真を追加</button><button class="btn" data-act="edit">${I.edit} 編集</button><button class="btn" data-act="share">共有ZIP</button>
         ${t.status === 'plan' ? '<button class="btn stamp" data-act="markdone">行ってきた！実績にする</button>' : ''}</div>
-      ${t.memo ? `<div><div class="section-title"><h3>メモ</h3></div><div class="memo">${esc(t.memo)}</div></div>` : ''}
-      <div>
-        <div class="section-title"><h3>写真</h3><span class="mono muted">${photos.length}枚</span></div>
-        ${photos.length ? `<div class="polaroids">${photos.map((p, i) => `<button class="polaroid" style="--r:${((i * 37) % 7) - 3}deg" data-photo="${p.id}"><img alt="" data-src="${p.id}">${p.place ? '' : '<b class="nopin" title="場所未設定">?</b>'}<span>${esc(p.caption || Geo.placeName(p.place))}</span></button>`).join('')}</div>` : '<p class="muted">まだ写真がありません。</p>'}
+      <div class="trip-tabs" role="tablist">
+        ${[['guide', 'しおり'], ['days', '旅程'], ['photos', '写真'], ['memo', 'メモ']].map(([k, l]) => `<button role="tab" data-tt="${k}" aria-selected="${k === cur}">${l}</button>`).join('')}
       </div>
+      <div id="ttBody"></div>
       <div class="muted" style="font-size:12px">${t.sample ? 'サンプルデータです。設定画面からまとめて削除できます。' : ''}</div>
     `, async (el, close) => {
-      for (const img of el.querySelectorAll('img[data-src]')) img.src = await URLS.get(img.dataset.src);
+      const body = el.querySelector('#ttBody');
+      const reopen = () => { const sc = el.querySelector('.page-body').scrollTop; close(); openTrip(id, cur).then(p => { if (p) p.el.querySelector('.page-body').scrollTop = sc; }); refresh(); };
+      const show = async () => {
+        state.tripTab = cur;
+        el.querySelectorAll('[data-tt]').forEach(b => b.setAttribute('aria-selected', b.dataset.tt === cur));
+        if (cur === 'guide') await TB.Guide.renderGuide(t, body, reopen);
+        else if (cur === 'days') TB.Guide.renderDays(t, body, reopen);
+        else if (cur === 'memo') {
+          body.innerHTML = `${t.memo ? `<div class="memo">${esc(t.memo)}</div>` : '<p class="muted">メモはまだありません。</p>'}<div class="row" style="margin-top:12px"><button class="btn small" data-memo>${I.edit} メモを書く</button></div>`;
+          body.querySelector('[data-memo]').onclick = () => { close(); editTrip(t); };
+        } else {
+          const photos = memories();
+          const spotName = sid => { const s = t.guide.spots.find(x => x.id === sid); return s ? s.name : ''; };
+          body.innerHTML = `<div class="section-title"><h3>思い出の写真</h3><span class="mono muted">${photos.length}枚</span></div>
+            ${photos.length ? `<div class="polaroids">${photos.map((p, i) => `<button class="polaroid" style="--r:${((i * 37) % 7) - 3}deg" data-photo="${p.id}"><img alt="" data-src="${p.id}">${p.place ? '' : '<b class="nopin" title="場所未設定">?</b>'}<span>${esc(p.caption || spotName(p.spotId) || Geo.placeName(p.place))}</span></button>`).join('')}</div>` : '<p class="muted">まだ写真がありません。「写真を追加」から選んでください。</p>'}`;
+          for (const img of body.querySelectorAll('img[data-src]')) img.src = await URLS.get(img.dataset.src);
+          body.querySelectorAll('[data-photo]').forEach(b => b.onclick = () => photoViewer(b.dataset.photo, reopen));
+        }
+      };
+      el.querySelectorAll('[data-tt]').forEach(b => b.onclick = () => { cur = b.dataset.tt; show(); });
       el.querySelector('[data-act="edit"]').onclick = () => { close(); editTrip(t); };
       el.querySelector('[data-act="photos"]').onclick = async () => { const files = await filePick('image/*', true); if (files.length) { close(); importFlow(files, t.id); } };
+      el.querySelector('[data-act="share"]').onclick = async () => {
+        toast('ZIPを作成中…');
+        try {
+          const blob = await Store.exportZip(null, [t.id]);
+          const ok = await saveFile(blob, `tabriogu_${(t.title || 'trip').replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`);
+          if (ok) toast('このしおりをZIPで書き出しました。相手は設定 →「ZIPを読み込む」で追加できます');
+        } catch (e) { toast('書き出しに失敗しました：' + e.message); }
+      };
       const md = el.querySelector('[data-act="markdone"]');
       if (md) md.onclick = async () => {
         const before = state.calc; t.status = 'done'; await Store.saveTrip(t); recalc(); refresh();
-        close(); openTrip(t.id); celebrate(Geo.diff(before, state.calc));
+        close(); openTrip(t.id, 'guide'); celebrate(Geo.diff(before, state.calc));
+        toast('実績モードにしました。スポットに「行った」をつけていきましょう');
       };
-      el.querySelectorAll('[data-photo]').forEach(b => b.onclick = () => photoViewer(b.dataset.photo, () => { close(); openTrip(id); }));
+      await show();
     });
     return pg;
   }
@@ -321,7 +351,8 @@
         if (draft.endDate && draft.startDate && draft.endDate < draft.startDate) [draft.startDate, draft.endDate] = [draft.endDate, draft.startDate];
         draft.memo = el.querySelector('#f-memo').value;
         const before = state.calc;
-        const saved = await Store.saveTrip(Object.assign(t, draft));
+        Object.assign(t, draft); TB.Guide.ensureDays(t);
+        const saved = await Store.saveTrip(t);
         await Store.requestPersist();
         recalc(); close(); refresh(); openTrip(saved.id);
         celebrate(Geo.diff(before, state.calc));
@@ -381,6 +412,7 @@
       <div class="row" style="justify-content:space-between"><span class="mono muted">${d.toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })}${p.dateGuessed ? '（推定）' : ''}</span>
         <button class="chip ${p.place ? '' : 'warn'}" data-place>📍 ${esc(Geo.placeName(p.place))}</button></div>
       <label class="field">ひとこと<input id="pv-cap" value="${esc(p.caption)}" placeholder="例：道頓堀でたこ焼き"></label>
+      ${t && t.guide && t.guide.spots.length ? `<label class="field">しおりのスポット<select id="pv-spot"><option value="">（なし）</option>${t.guide.spots.map(sp => `<option value="${sp.id}" ${sp.id === p.spotId ? 'selected' : ''}>${esc(sp.name)}</option>`).join('')}</select></label>` : ''}
       <div class="row">
         <button class="btn small" data-tc>この旅の表紙にする</button>
         ${p.place ? '<button class="btn small" data-mc>地図の表紙にする</button>' : ''}
@@ -388,6 +420,13 @@
       </div></div>`, (el, close) => {
       const done = () => { close(); onChange && onChange(); };
       el.querySelector('#pv-cap').onchange = async e => { p.caption = e.target.value; await Store.savePhoto(p); };
+      const sps = el.querySelector('#pv-spot');
+      if (sps) sps.onchange = async () => {
+        p.spotId = sps.value || null; await Store.savePhoto(p);
+        const sp = p.spotId && t.guide.spots.find(x => x.id === p.spotId);
+        if (sp && t.status === 'done' && !sp.result) { sp.result = 'went'; await Store.saveTrip(t); }
+        toast(sp ? `「${sp.name}」の写真にしました` : 'スポットとの紐付けを外しました');
+      };
       el.querySelector('[data-place]').onclick = () => picker(p.place ? [p.place] : [], false, async ([k]) => {
         const before = state.calc; p.place = k; await Store.savePhoto(p); recalc(); refresh(); done(); celebrate(Geo.diff(before, state.calc));
       });
@@ -534,7 +573,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.2 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-export').onclick = async () => {
@@ -643,10 +682,21 @@
       <button class="btn primary block" data-a="photos">${I.camera} 写真から旅をつくる</button>
       <button class="btn block" data-a="done">行った旅を記録する</button>
       <button class="btn block" data-a="plan">これからの旅を計画する</button>
+      <button class="btn block" data-a="kozy">KOZYBOOK（しおりHTML）から計画をつくる</button>
       <p class="muted" style="font-size:12px;margin:0">写真を選ぶと、撮影日と位置情報から旅と都道府県・国を自動で振り分けます。</p></div>`, (el, close) => {
       el.querySelector('[data-a="photos"]').onclick = () => { close(); startImport(); };
       el.querySelector('[data-a="done"]').onclick = () => { close(); editTrip(Store.newTrip({ status: 'done' }), true); };
       el.querySelector('[data-a="plan"]').onclick = () => { close(); editTrip(Store.newTrip({ status: 'plan' }), true); };
+      el.querySelector('[data-a="kozy"]').onclick = async () => {
+        close();
+        const [f] = await filePick('.html,.htm,text/html', false); if (!f) return;
+        toast('KOZYBOOKを読み込んでいます…');
+        try {
+          const t = await TB.Guide.createFromKozybook(f);
+          recalc(); refresh(); await openTrip(t.id, 'guide');
+          toast(`「${t.title}」をつくりました。${t.startDate ? '' : '編集から日付を入れてください'}`);
+        } catch (e) { toast(e.message); }
+      };
     });
   }
 
@@ -675,5 +725,6 @@
       navigator.serviceWorker.register('sw.js').catch(() => { });
     }
   }
+  TB.UI = { page, sheet, toast, filePick, picker, recalc, celebrate, refresh, openTrip, calc: () => state.calc };
   boot();
 })();
