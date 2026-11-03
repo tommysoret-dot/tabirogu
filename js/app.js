@@ -628,6 +628,7 @@
         <h3>保存場所</h3>
         <p class="muted">データはこの端末のブラウザ内（IndexedDB）に保存されます。サーバーには送られません。${est ? '<br>' + est : ''}<br>長期保存の許可：${Store.settings.persisted ? '<b style="color:var(--ok)">許可済み</b>' : '未許可（初回保存時に申請します）'}</p>
         <p class="muted">iPhoneはSafariの共有ボタン →「ホーム画面に追加」でアプリとして使えます。</p>
+        ${Store.brokenImages ? `<p style="color:var(--stamp)">端末側で読めなくなった写真が${Store.brokenImages}枚あります。お手数ですが、その写真を取り込み直してください。</p>` : ''}
       </div>
       <div class="card">
         <h3>サンプルデータ</h3>
@@ -635,7 +636,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.2 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.3 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });
@@ -775,6 +776,7 @@
     $('#ptsBtn').onclick = () => go('stats');
     try {
       await Promise.all([Store.load(), Geo.load()]);
+      try { const m = await Store.migrateBlobs(); if (m.converted) URLS.clear(); } catch (e) { }
     } catch (e) {
       $('#view').innerHTML = `<div class="empty"><h3>読み込みに失敗しました</h3><p class="muted">${esc(e.message)}</p></div>`; return;
     }

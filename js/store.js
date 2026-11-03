@@ -34,6 +34,11 @@
   const get = (s, k) => tx([s], 'readonly', t => req(t.objectStore(s).get(k)));
   const put = (s, v) => tx([s], 'readwrite', t => { t.objectStore(s).put(v); });
 
+  async function toBuf(b) {
+    if (b == null || b instanceof ArrayBuffer) return b;
+    if (b.arrayBuffer) return b.arrayBuffer();
+    return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = () => rej(fr.error); fr.readAsArrayBuffer(b); });
+  }
   const uid = (p) => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
   const DEFAULT_SETTINGS = { key: 'settings', bookName: 'ふたりの旅帳', covers: {}, lastExport: null, persisted: false };
@@ -69,8 +74,10 @@
       ph.forEach(pid => URLS.drop(pid));
     },
     async addPhotos(list) { // list: [{meta, full, thumb}]
+      // Safari can lose Blobs kept in IndexedDB, so image bytes are stored as ArrayBuffer
+      const recs = await Promise.all(list.map(async x => ({ id: x.meta.id, type: (x.full && x.full.type) || 'image/jpeg', full: await toBuf(x.full), thumb: await toBuf(x.thumb) })));
       await tx(['photos', 'blobs'], 'readwrite', t => {
-        list.forEach(x => { t.objectStore('photos').put(x.meta); t.objectStore('blobs').put({ id: x.meta.id, full: x.full, thumb: x.thumb }); });
+        list.forEach((x, i) => { t.objectStore('photos').put(x.meta); t.objectStore('blobs').put(recs[i]); });
       });
       list.forEach(x => this.photos.push(x.meta));
     },
@@ -81,9 +88,29 @@
       this.trips.forEach(t => { if (t.coverPhotoId === id) t.coverPhotoId = null; });
       for (const k in this.settings.covers) if (this.settings.covers[k] === id) delete this.settings.covers[k];
     },
-    getBlob(id) { return get('blobs', id); },
+    async getBlob(id) {
+      const r = await get('blobs', id); if (!r) return null;
+      const type = r.type || 'image/jpeg';
+      const as = v => v == null ? v : (v instanceof Blob ? v : new Blob([v], { type }));
+      return { id: r.id, full: as(r.full), thumb: as(r.thumb) };
+    },
+    /* convert images saved by older versions (Blob) to ArrayBuffer; returns how many could not be read */
+    async migrateBlobs() {
+      const keys = await tx(['blobs'], 'readonly', t => req(t.objectStore('blobs').getAllKeys()));
+      let converted = 0, broken = 0;
+      for (const k of keys) {
+        const r = await get('blobs', k);
+        if (!r || !((r.full instanceof Blob) || (r.thumb instanceof Blob))) continue;
+        try {
+          const rec = { id: r.id, type: (r.full && r.full.type) || 'image/jpeg', full: await toBuf(r.full), thumb: await toBuf(r.thumb) };
+          await put('blobs', rec); converted++;
+        } catch (e) { broken++; }
+      }
+      this.brokenImages = broken;
+      return { converted, broken };
+    },
     async saveMovie(key, blob) {
-      await put('blobs', { id: 'mv-' + key, full: blob, thumb: null });
+      await put('blobs', { id: 'mv-' + key, type: blob.type, full: await toBuf(blob), thumb: null });
       this.settings.movies = this.settings.movies || {};
       this.settings.movies[key] = { createdAt: Date.now(), type: blob.type, size: blob.size };
       await this.saveSettings();
@@ -165,7 +192,7 @@
       const k = id + ':' + kind;
       if (this.m.has(k)) return this.m.get(k);
       const b = await Store.getBlob(id);
-      if (!b) return '';
+      if (!b || !(b[kind] || b.full)) return '';
       const u = URL.createObjectURL(b[kind] || b.full);
       this.m.set(k, u);
       return u;
