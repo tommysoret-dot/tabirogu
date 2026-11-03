@@ -230,21 +230,21 @@
       const n = Store.photos.filter(p => p.tripId === t.id && p.kind !== 'guide').length;
       const sp = (t.guide && t.guide.spots || []).length;
       const places = (t.places || []).slice(0, 3).map(k => Geo.placeName(k)).join('・');
-      return `${head}<button class="ticket tape" data-trip="${t.id}">
+      return `${head}<div class="ticket tape" role="button" tabindex="0" data-trip="${t.id}">
           ${(() => { const ph = tripPhotos(t); return `<div class="cover" data-cov="${ph[0] || ''}">${ph[0] ? '' : placeShape(t)}${ph.length > 1 ? `<span class="cover-strip">${ph.slice(1, 4).map(id => `<i data-cov="${id}"></i>`).join('')}</span>` : ''}</div>`; })()}
           <div class="body">
             <div class="date">${fmtRange(t.startDate, t.endDate)}</div>
             <h3>${esc(t.title || '無題の旅')}</h3>
             <div class="muted" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(places)}</div>
             <div class="meta"><span class="badge ${t.status}">${t.status === 'done' ? '実績' : '予定'}</span>${left != null && left >= 0 ? `<span class="countdown">${left ? 'あと' + left + '日' : '今日から！'}</span>` : ''}${t.sample ? '<span class="badge sample">サンプル</span>' : ''}<span>${n}枚</span>${sp ? `<span>スポット${sp}</span>` : ''}<span>${nights(t.startDate, t.endDate)}</span></div>
-          </div></button>`;
+          </div></div>`;
     }).join('')}</div>` : emptyTrips()}
       ${list.length ? '<p style="text-align:center;margin:24px 0 0"><button class="btn small" id="diagBtn">🔧 表示チェック</button></p>' : ''}`;
     v.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.tripFilter = b.dataset.f; renderTrips(); });
     v.querySelectorAll('[data-otd]').forEach(b => b.onclick = () => openTrip(b.dataset.otd, 'photos'));
     const dg = v.querySelector('#diagBtn'); if (dg) dg.onclick = diagnose;
     TB.Stats.fill(v);
-    v.querySelectorAll('[data-trip]').forEach(b => b.onclick = () => openTrip(b.dataset.trip));
+    v.querySelectorAll('[data-trip]').forEach(b => { b.onclick = () => openTrip(b.dataset.trip); b.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTrip(b.dataset.trip); } }; });
     v.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     v.querySelectorAll('[data-sample]').forEach(b => b.onclick = loadSample);
     v.querySelectorAll('[data-import]').forEach(b => b.onclick = startImport);
@@ -290,7 +290,7 @@
     } catch (e) { blobTest = 'NG ' + e.message; }
     const rows = [
       ['端末', navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 120)],
-      ['アプリ', 'v0.5.6' + (navigator.serviceWorker && navigator.serviceWorker.controller ? ' / SWあり' : ' / SWなし') + (matchMedia('(display-mode: standalone)').matches ? ' / ホーム画面' : ' / ブラウザ')],
+      ['アプリ', 'v0.5.7' + (navigator.serviceWorker && navigator.serviceWorker.controller ? ' / SWあり' : ' / SWなし') + (matchMedia('(display-mode: standalone)').matches ? ' / ホーム画面' : ' / ブラウザ')],
       ['写真', `${Store.photos.length}枚（読めない ${Store.brokenImages || 0}）`],
       ['写真の読み込み', blobTest],
       ['表紙の枠', cv ? `${Math.round(r.width)}×${Math.round(r.height)} / display:${cs.display} / bg:${cs.backgroundColor} / 子要素${cv.children.length}` : 'なし'],
@@ -667,7 +667,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABIROGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.5.6 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.5.7 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });

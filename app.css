@@ -433,3 +433,9 @@ button.chip { cursor: pointer; }
 .spot-lbl, .spot-no, .went-stamp { z-index: 1; }
 .strip button.is-cover::after { z-index: 1; }
 .spot-photo:not([data-img])::after { z-index: 1; }
+
+/* ---------- v0.5.7: iPhone Safari collapsed the cover inside a <button> grid ---------- */
+.ticket { cursor: pointer; align-items: stretch; }
+.ticket .cover { min-height: 132px; height: 100%; align-self: stretch; }
+.otd { display: flex; }
+.otd-strip i { min-height: 72px; }
