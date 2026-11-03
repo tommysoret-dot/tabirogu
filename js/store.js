@@ -65,6 +65,8 @@
     },
     async deleteTrip(id) {
       const ph = this.photos.filter(p => p.tripId === id).map(p => p.id);
+      const now = Date.now(); this.settings.deleted = this.settings.deleted || {};
+      this.settings.deleted['t:' + id] = now; ph.forEach(pid => { this.settings.deleted['p:' + pid] = now; });
       await tx(['trips', 'photos', 'blobs'], 'readwrite', t => {
         t.objectStore('trips').delete(id);
         ph.forEach(pid => { t.objectStore('photos').delete(pid); t.objectStore('blobs').delete(pid); });
@@ -72,6 +74,7 @@
       this.trips = this.trips.filter(t => t.id !== id);
       this.photos = this.photos.filter(p => p.tripId !== id);
       ph.forEach(pid => URLS.drop(pid));
+      await this.saveSettings();
     },
     async addPhotos(list) { // list: [{meta, full, thumb}]
       // Safari can lose Blobs kept in IndexedDB, so image bytes are stored as ArrayBuffer
@@ -81,12 +84,14 @@
       });
       list.forEach(x => this.photos.push(x.meta));
     },
-    async savePhoto(p) { await put('photos', p); const i = this.photos.findIndex(x => x.id === p.id); if (i >= 0) this.photos[i] = p; },
+    async savePhoto(p, keepTime) { if (!keepTime) p.updatedAt = Date.now(); await put('photos', p); const i = this.photos.findIndex(x => x.id === p.id); if (i >= 0) this.photos[i] = p; },
     async deletePhoto(id) {
+      this.settings.deleted = this.settings.deleted || {}; this.settings.deleted['p:' + id] = Date.now();
       await tx(['photos', 'blobs'], 'readwrite', t => { t.objectStore('photos').delete(id); t.objectStore('blobs').delete(id); });
       this.photos = this.photos.filter(p => p.id !== id); URLS.drop(id);
       this.trips.forEach(t => { if (t.coverPhotoId === id) t.coverPhotoId = null; });
       for (const k in this.settings.covers) if (this.settings.covers[k] === id) delete this.settings.covers[k];
+      await this.saveSettings();
     },
     async getBlob(id) {
       const r = await get('blobs', id); if (!r) return null;
@@ -108,6 +113,17 @@
       }
       this.brokenImages = broken;
       return { converted, broken };
+    },
+    /* raw access for device-to-device sync (no timestamp changes) */
+    async putTripRaw(t) { await put('trips', t); const i = this.trips.findIndex(x => x.id === t.id); if (i >= 0) this.trips[i] = t; else this.trips.push(t); },
+    async putPhotoRaw(meta, rec) {
+      await tx(['photos', 'blobs'], 'readwrite', t => { t.objectStore('photos').put(meta); if (rec) t.objectStore('blobs').put(rec); });
+      const i = this.photos.findIndex(x => x.id === meta.id); if (i >= 0) this.photos[i] = meta; else this.photos.push(meta);
+      URLS.drop(meta.id);
+    },
+    async getBlobRaw(id) {
+      const r = await get('blobs', id); if (!r) return null;
+      return { id: r.id, type: r.type || 'image/jpeg', full: await toBuf(r.full), thumb: await toBuf(r.thumb) };
     },
     async saveMovie(key, blob) {
       await put('blobs', { id: 'mv-' + key, type: blob.type, full: await toBuf(blob), thumb: null });

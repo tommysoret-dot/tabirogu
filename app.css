@@ -439,3 +439,11 @@ button.chip { cursor: pointer; }
 .ticket .cover { min-height: 132px; height: 100%; align-self: stretch; }
 .otd { display: flex; }
 .otd-strip i { min-height: 72px; }
+
+/* ---------- v0.6: device sync ---------- */
+.qr-box { background: #fff; border-radius: 8px; padding: 8px; align-self: center; width: min(100%, 330px); }
+.qr-box svg { display: block; width: 100%; height: auto; }
+.scan-box { width: min(100%, 330px); aspect-ratio: 1; align-self: center; border-radius: 8px; overflow: hidden; background: #111; display: flex; align-items: center; justify-content: center; padding: 8px; }
+.scan-video { width: 100%; height: 100%; object-fit: cover; }
+.code-box { width: 100%; min-height: 80px; font: 11px var(--font-mono); word-break: break-all; border: 1px solid var(--line); border-radius: 4px; background: var(--paper-2); color: var(--ink); padding: 6px; }
+.sync-sheet details summary { cursor: pointer; }

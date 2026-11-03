@@ -290,7 +290,7 @@
     } catch (e) { blobTest = 'NG ' + e.message; }
     const rows = [
       ['端末', navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 120)],
-      ['アプリ', 'v0.5.7' + (navigator.serviceWorker && navigator.serviceWorker.controller ? ' / SWあり' : ' / SWなし') + (matchMedia('(display-mode: standalone)').matches ? ' / ホーム画面' : ' / ブラウザ')],
+      ['アプリ', 'v0.6.0' + (navigator.serviceWorker && navigator.serviceWorker.controller ? ' / SWあり' : ' / SWなし') + (matchMedia('(display-mode: standalone)').matches ? ' / ホーム画面' : ' / ブラウザ')],
       ['写真', `${Store.photos.length}枚（読めない ${Store.brokenImages || 0}）`],
       ['写真の読み込み', blobTest],
       ['表紙の枠', cv ? `${Math.round(r.width)}×${Math.round(r.height)} / display:${cs.display} / bg:${cs.backgroundColor} / 子要素${cv.children.length}` : 'なし'],
@@ -656,6 +656,13 @@
         <div class="row"><button class="btn primary" id="s-export">ZIPを書き出す</button><button class="btn" id="s-import">ZIPを読み込む</button></div>
       </div>
       <div class="card">
+        <h3>ふたりで同期</h3>
+        <p class="muted">ふたりのスマホを直接つないで、旅・写真・しおりをお互いに足し合わせます。一方が「同期をはじめる」、もう一方が「相手のQRを読む」を押して、QRコードを読み合ってください。同じWi-Fiにつないでいると確実です。</p>
+        <label class="field">この端末の名前<input id="s-dev" value="${esc(Store.settings.deviceName || '')}" placeholder="例：こうじのiPhone"></label>
+        <div class="row"><button class="btn primary" id="s-sync-host">📤 同期をはじめる</button><button class="btn" id="s-sync-join">📷 相手のQRを読む</button></div>
+        <p class="mono muted" style="font-size:12px">最後の同期：${Store.settings.lastSync ? new Date(Store.settings.lastSync).toLocaleString('ja-JP') : 'まだありません'}</p>
+      </div>
+      <div class="card">
         <h3>保存場所</h3>
         <p class="muted">データはこの端末のブラウザ内（IndexedDB）に保存されます。サーバーには送られません。${est ? '<br>' + est : ''}<br>長期保存の許可：${Store.settings.persisted ? '<b style="color:var(--ok)">許可済み</b>' : '未許可（初回保存時に申請します）'}</p>
         <p class="muted">iPhoneはSafariの共有ボタン →「ホーム画面に追加」でアプリとして使えます。</p>
@@ -667,9 +674,12 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABIROGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.5.7 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.6.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
+    $('#s-dev').onchange = async e => { Store.settings.deviceName = e.target.value.trim(); await Store.saveSettings(); };
+    $('#s-sync-host').onclick = () => TB.Sync.open('host');
+    $('#s-sync-join').onclick = () => TB.Sync.open('join');
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });
     $('#s-export').onclick = async () => {
       const bar = $('#zipProg'); bar.hidden = false;
