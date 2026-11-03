@@ -1,0 +1,15 @@
+{
+  "name": "TABRIOGU ふたりの旅帳",
+  "short_name": "TABRIOGU",
+  "start_url": "./index.html#map",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ebe3d2",
+  "theme_color": "#ebe3d2",
+  "lang": "ja",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
