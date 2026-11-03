@@ -573,7 +573,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.2 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.2.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-export').onclick = async () => {
@@ -722,7 +722,16 @@
     window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t !== state.tab && ['map', 'trips', 'stats', 'prefs'].includes(t)) go(t); });
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (state.tab === 'map') MapView.draw(); }, 200); });
     if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.hostname.endsWith('claude.ai') && !location.hostname.includes('claudeusercontent')) {
-      navigator.serviceWorker.register('sw.js').catch(() => { });
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        reg.update();
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update(); });
+      }).catch(() => { });
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => { // a new version took over: reload once
+        if (!hadController || reloaded || document.querySelector('.page, .overlay')) return;
+        reloaded = true; location.reload();
+      });
     }
   }
   TB.UI = { page, sheet, toast, filePick, picker, recalc, celebrate, refresh, openTrip, calc: () => state.calc };
