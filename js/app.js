@@ -222,17 +222,21 @@
           ${[['all', 'すべて'], ['done', '実績'], ['plan', '予定']].map(([k, l]) => `<button data-f="${k}" aria-pressed="${f === k}">${l}</button>`).join('')}
         </div>
       </div>
-      ${list.length ? `<div class="trip-list">${list.map(t => {
+      ${list.length ? `<div class="trip-list">${list.map((t, i) => {
+      const yr = t.startDate ? t.startDate.slice(0, 4) : '日付未定';
+      const prevYr = i ? (list[i - 1].startDate ? list[i - 1].startDate.slice(0, 4) : '日付未定') : null;
+      const head = yr !== prevYr ? `<div class="year-head"><span>${yr}</span></div>` : '';
+      const left = t.status === 'plan' && t.startDate ? Math.ceil((new Date(t.startDate + 'T00:00:00') - new Date(new Date().toDateString())) / 864e5) : null;
       const n = Store.photos.filter(p => p.tripId === t.id && p.kind !== 'guide').length;
       const sp = (t.guide && t.guide.spots || []).length;
       const places = (t.places || []).slice(0, 3).map(k => Geo.placeName(k)).join('・');
-      return `<button class="ticket tape" data-trip="${t.id}">
+      return `${head}<button class="ticket tape" data-trip="${t.id}">
           <div class="cover" data-cov="${t.coverPhotoId || ''}">${t.coverPhotoId ? '' : (t.status === 'plan' ? 'これから' : 'no photo')}</div>
           <div class="body">
             <div class="date">${fmtRange(t.startDate, t.endDate)}</div>
             <h3>${esc(t.title || '無題の旅')}</h3>
             <div class="muted" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(places)}</div>
-            <div class="meta"><span class="badge ${t.status}">${t.status === 'done' ? '実績' : '予定'}</span>${t.sample ? '<span class="badge sample">サンプル</span>' : ''}<span>${n}枚</span>${sp ? `<span>スポット${sp}</span>` : ''}<span>${nights(t.startDate, t.endDate)}</span></div>
+            <div class="meta"><span class="badge ${t.status}">${t.status === 'done' ? '実績' : '予定'}</span>${left != null && left >= 0 ? `<span class="countdown">${left ? 'あと' + left + '日' : '今日から！'}</span>` : ''}${t.sample ? '<span class="badge sample">サンプル</span>' : ''}<span>${n}枚</span>${sp ? `<span>スポット${sp}</span>` : ''}<span>${nights(t.startDate, t.endDate)}</span></div>
           </div></button>`;
     }).join('')}</div>` : emptyTrips()}`;
     v.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.tripFilter = b.dataset.f; renderTrips(); });
@@ -454,6 +458,13 @@
       const n = pg.el.querySelector('#imp-n'); if (!n) return; // closed
       n.textContent = `${i + 1}/${files.length}`; pg.el.querySelector('#imp-bar').style.width = ((i + 1) / files.length * 100) + '%';
     }
+    // skip photos that are already in the book (same file name and shooting time)
+    const seen = new Set(Store.photos.filter(p => p.name).map(p => p.name + '|' + p.takenAt));
+    const dupCount = items.length;
+    for (let i = items.length - 1; i >= 0; i--) { const k = items[i].meta.name + '|' + items[i].meta.takenAt; if (seen.has(k)) items.splice(i, 1); else seen.add(k); }
+    const dups = dupCount - items.length;
+    const noGps = items.filter(i => i.meta.lat == null).length;
+    if (!items.length) { pg.close(); toast(dups ? `${dups}枚とも、すでに旅帳にある写真でした` : '読み込める写真がありませんでした'); return; }
     let groups;
     if (forcedTripId) {
       const t = Store.trips.find(x => x.id === forcedTripId);
@@ -468,7 +479,8 @@
     const box = pg.el.querySelector('#imp');
     const draw = () => {
       box.innerHTML = `
-        <p>${items.length}枚を<b>${groups.length}つの旅</b>に分けました。${failed.length ? `<br><span style="color:var(--stamp)">読み込めなかった写真：${failed.map(esc).join('、')}</span>` : ''}</p>
+        <p>${items.length}枚を<b>${groups.length}つの旅</b>に分けました。${failed.length ? `<br><span style="color:var(--stamp)">読み込めなかった写真：${failed.map(esc).join('、')}</span>` : ''}${dups ? `<br><span class="muted">すでに旅帳にある${dups}枚は取り込みません。</span>` : ''}</p>
+        ${noGps > items.length / 2 ? `<div class="banner"><p><b>位置情報が入っていない写真が${noGps}枚あります。</b>iPhoneでは、写真を選ぶ画面の上の「オプション」で「位置情報」をオンにすると、都道府県・国を自動で判定できます。このままでも、下の「場所を選ぶ」でまとめて指定できます。</p></div>` : ''}
         ${groups.map((g, gi) => {
         const noPin = g.items.filter(i => !i.meta.place).length;
         return `<div class="group tape" style="--tape-color:var(--tape-${(gi % 4) + 1})">
@@ -601,7 +613,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.4.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.4.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });

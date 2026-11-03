@@ -89,9 +89,11 @@
     if (first || silent) return;
     setTimeout(() => TB.UI.toast(`称号「${fresh.map(b => b.icon + ' ' + b.name).join('」「')}」を獲得しました`), 600);
   }
+  const PRESTIGE = ['first', 'north', 'south', 'abroad', 'long', 'movie', 'pref10', 'region1', 'seasons', 'streak3', 'trip10', 'cont3', 'far', 'guide50', 'follow', 'pref24', 'region4', 'country10', 'photo500', 'trip30', 'cont5', 'pref47'];
   function currentTitle() {
     const got = badges(compute()).filter(b => b.got);
-    return got.length ? got[got.length - 1] : null;
+    got.sort((a, b) => PRESTIGE.indexOf(b.id) - PRESTIGE.indexOf(a.id));
+    return got[0] || null;
   }
 
   /* ---------- on this day ---------- */

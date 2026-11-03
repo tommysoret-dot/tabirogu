@@ -1,5 +1,5 @@
 /* TABRIOGU service worker — network-first (always the latest version when online), cache fallback offline */
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const CACHE = 'tabriogu-v' + VERSION;
 const CORE = ['./', './index.html', './app.css', './manifest.webmanifest', './js/store.js', './js/geo.js', './js/photos.js', './js/app.js', './js/guide.js', './js/movie.js', './js/stats.js',
   './data/japan.topo.json', './data/world.topo.json', './icons/icon-192.png'];

@@ -76,7 +76,7 @@
     if (loose.length) html += `<section class="gsec"><div class="gsec-head"><span class="pill">その他</span></div><div class="spots">${loose.map((s, i) => spotCard(t, s, i)).join('')}</div></section>`;
     box.innerHTML = html;
     await fillImages(box);
-    box.querySelectorAll('[data-spot]').forEach(b => b.onclick = (e) => { if (e.target.closest('[data-res]')) return; spotEditor(t, t.guide.spots.find(s => s.id === b.dataset.spot), rerender); });
+    box.querySelectorAll('[data-spot]').forEach(b => b.onclick = (e) => { if (e.target.closest('[data-res], a')) return; spotEditor(t, t.guide.spots.find(s => s.id === b.dataset.spot), rerender); });
     box.querySelectorAll('[data-addspot]').forEach(b => b.onclick = () => spotEditor(t, null, rerender, b.dataset.addspot));
     box.querySelectorAll('[data-res]').forEach(b => b.onclick = async (e) => {
       e.stopPropagation();
@@ -92,6 +92,17 @@
       catch (e) { UI().toast(e.message); }
     };
   }
+  function urlOf(s) {
+    const u = ((s.info || []).find(([k]) => k === 'URL') || [])[1] || '';
+    if (!u) return '';
+    const full = /^https?:\/\//i.test(u) ? u : 'https://' + u.replace(/^\/+/, '');
+    return /^https?:\/\/[^\s]+$/i.test(full) ? full : '';
+  }
+  function infoValue(k, v) {
+    if (k === 'TEL') { const num = v.replace(/[^\d+]/g, ''); return num ? `<a href="tel:${esc(num)}">${esc(v)}</a>` : esc(v); }
+    if (k === 'URL') return esc(v.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''));
+    return esc(v);
+  }
   function spotCard(t, s, i) {
     const pid = spotPhotoId(t, s);
     const done = t.status === 'done';
@@ -106,7 +117,8 @@
         ${s.desc ? `<p class="spot-desc">${esc(s.desc)}</p>` : ''}
         ${s.point ? `<div class="spot-point"><b>✔ ここがポイント！</b>${esc(s.point)}</div>` : ''}
         ${(s.tags || []).length ? `<div class="chips">${s.tags.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : ''}
-        ${info.length ? `<dl class="spot-info">${info.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+        ${info.length ? `<dl class="spot-info">${info.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${infoValue(k, v)}</dd>`).join('')}</dl>` : ''}
+        <div class="spot-links"><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([s.name, (s.area || '').split('/')[0]].join(' ').trim())}" target="_blank" rel="noopener">📍 地図で開く</a>${urlOf(s) ? `<a href="${esc(urlOf(s))}" target="_blank" rel="noopener">🔗 公式サイト</a>` : ''}</div>
         ${done && s.memo ? `<div class="spot-memo">${esc(s.memo)}</div>` : ''}
         ${done ? `<div class="res-row"><button data-res="went" data-sid="${s.id}" aria-pressed="${s.result === 'went'}">✔ 行った</button><button data-res="skip" data-sid="${s.id}" aria-pressed="${s.result === 'skip'}">行かなかった</button></div>` : ''}
       </div></article>`;
@@ -226,15 +238,16 @@
   }
 
   /* ================= 旅程 tab ================= */
-  function renderDays(t, box, rerender, dayIdx = 0) {
+  function renderDays(t, box, rerender, dayIdx) {
     ensure(t);
+    if (dayIdx == null) { const today = Photos.localDate(Date.now()); dayIdx = Math.max(0, t.days.findIndex(d => d.date === today)); }
     const done = t.status === 'done';
     const idx = Math.min(dayIdx, t.days.length - 1);
     const day = t.days[idx];
     const spotOf = id => t.guide.spots.find(s => s.id === id);
     box.innerHTML = `
       ${t.startDate ? '' : '<div class="banner"><p>出発日と帰着日を入れると、日ごとの旅程に分かれます。</p></div>'}
-      <div class="day-tabs" role="tablist">${t.days.map((d, i) => `<button role="tab" data-day="${i}" aria-selected="${i === idx}">${esc(dayLabel(d, i))}</button>`).join('')}</div>
+      <div class="day-tabs" role="tablist">${t.days.map((d, i) => `<button role="tab" data-day="${i}" aria-selected="${i === idx}">${esc(dayLabel(d, i))}${d.date === Photos.localDate(Date.now()) ? ' ・今日' : ''}</button>`).join('')}</div>
       <ol class="timeline">${day.items.map((it, i) => {
       const sp = spotOf(it.spotId);
       return `<li class="${it.done === false ? 'skipped' : ''}">
