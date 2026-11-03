@@ -263,7 +263,7 @@
         </div>
         ${t.status === 'done' ? '<div class="stampmark">旅の<br>記録</div>' : '<div class="stampmark" style="border-style:dashed">旅の<br>計画</div>'}
       </div>
-      <div class="row"><button class="btn primary" data-act="photos">${I.camera} 写真を追加</button><button class="btn" data-act="edit">${I.edit} 編集</button><button class="btn" data-act="share">共有ZIP</button>
+      <div class="row"><button class="btn primary" data-act="photos">${I.camera} 写真を追加</button><button class="btn" data-act="edit">${I.edit} 編集</button><button class="btn" data-act="share">共有ZIP</button><button class="btn" data-act="movie">🎬 ムービー</button>
         ${t.status === 'plan' ? '<button class="btn stamp" data-act="markdone">行ってきた！実績にする</button>' : ''}</div>
       <div class="trip-tabs" role="tablist">
         ${[['guide', 'しおり'], ['days', '旅程'], ['photos', '写真'], ['memo', 'メモ']].map(([k, l]) => `<button role="tab" data-tt="${k}" aria-selected="${k === cur}">${l}</button>`).join('')}
@@ -293,6 +293,7 @@
       el.querySelectorAll('[data-tt]').forEach(b => b.onclick = () => { cur = b.dataset.tt; show(); });
       el.querySelector('[data-act="edit"]').onclick = () => { close(); editTrip(t); };
       el.querySelector('[data-act="photos"]').onclick = async () => { const files = await filePick('image/*', true); if (files.length) { close(); importFlow(files, t.id); } };
+      el.querySelector('[data-act="movie"]').onclick = () => TB.Movie.open({ type: 'trip', id: t.id });
       el.querySelector('[data-act="share"]').onclick = async () => {
         toast('ZIPを作成中…');
         try {
@@ -514,6 +515,20 @@
   }
 
   /* ================= CELEBRATION ================= */
+  function confetti() {
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const c = document.createElement('canvas'); c.className = 'confetti'; c.width = innerWidth; c.height = innerHeight;
+    document.body.appendChild(c);
+    const x = c.getContext('2d'), cols = ['#c2452d', '#e2b84b', '#9bb39a', '#9cc0d6', '#22304a', '#de9696'];
+    const ps = Array.from({ length: 140 }, () => ({ x: c.width / 2 + (Math.random() - .5) * 80, y: c.height * .42, vx: (Math.random() - .5) * 14, vy: -Math.random() * 16 - 4, r: Math.random() * 6, w: 6 + Math.random() * 8, h: 4 + Math.random() * 6, c: cols[(Math.random() * cols.length) | 0], s: (Math.random() - .5) * .3 }));
+    const t0 = performance.now();
+    const f = (now) => {
+      const t = now - t0; x.clearRect(0, 0, c.width, c.height);
+      ps.forEach(p => { p.vy += .42; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.s; x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.c; x.globalAlpha = Math.max(0, 1 - t / 2600); x.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); x.restore(); });
+      if (t < 2600) requestAnimationFrame(f); else c.remove();
+    };
+    requestAnimationFrame(f);
+  }
   function celebrate(diff) {
     if (!diff || (!diff.newPlaces.length && !diff.newRegions.length)) return false;
     const P = Geo.POINTS;
@@ -522,9 +537,14 @@
     sheet(`<div class="celebrate">
       <div class="stampmark">${diff.newRegions.length ? '制覇' : '初訪問'}</div>
       <h2>+${diff.gained}pt</h2>
-      <ul>${reg}${pl}</ul>
-      ${diff.newRegions.length ? '<p class="muted" style="margin:0;font-size:13px">制覇記念の思い出ムービーは、次のアップデートで作れるようになります。</p>' : ''}
-      <button class="btn primary" data-ok>旅帳を閉じる</button></div>`, (el, close) => { el.querySelector('[data-ok]').onclick = close; });
+      ${reg ? `<ul>${reg}</ul>` : ''}
+      ${diff.newRegions.length ? `<div class="stack" style="gap:8px;width:100%">${diff.newRegions.map(r => `<button class="btn stamp block" data-movie="${esc(r.id)}">🎬 ${esc(r.name)}${r.prefs ? '地方' : ''}の思い出ムービーをつくる</button>`).join('')}</div>` : ''}
+      ${pl ? `<ul>${pl}</ul>` : ''}
+      <button class="btn primary" data-ok>旅帳を閉じる</button></div>`, (el, close) => {
+      el.querySelector('[data-ok]').onclick = close;
+      el.querySelectorAll('[data-movie]').forEach(b => b.onclick = () => { close(); TB.Movie.open({ type: 'region', id: b.dataset.movie }); });
+    });
+    if (diff.newRegions.length) confetti();
     return true;
   }
 
@@ -532,7 +552,7 @@
   function renderStats() {
     const v = $('#view'); v.className = 'view';
     const c = state.calc, P = Geo.POINTS;
-    const regCard = (r, suffix = '') => `<div class="reg ${r.done ? 'done' : ''}"><b>${esc(r.name)}${suffix}</b><span class="mono">${r.got}/${r.total}</span>${r.done ? '<span class="done-mark">制覇</span>' : ''}<div class="bar"><i style="width:${r.total ? r.got / r.total * 100 : 0}%"></i></div><span class="muted" style="font-size:12px;grid-column:1/-1">制覇ボーナス ${r.bonus}pt</span></div>`;
+    const regCard = (r, suffix = '') => `<div class="reg ${r.done ? 'done' : ''}"><b>${esc(r.name)}${suffix}</b><span class="mono">${r.got}/${r.total}</span>${r.done ? `<span class="done-mark">制覇</span><button class="mv-btn" data-movie="${esc(r.id)}" aria-label="${esc(r.name)}の思い出ムービー">🎬 ムービー${(Store.settings.movies || {})['r:' + r.id] ? ' ▶' : ''}</button>` : ''}<div class="bar"><i style="width:${r.total ? r.got / r.total * 100 : 0}%"></i></div><span class="muted" style="font-size:12px;grid-column:1/-1">制覇ボーナス ${r.bonus}pt</span></div>`;
     const conts = Geo.UN_REGIONS.map(([cont]) => cont);
     v.innerHTML = `<div class="stack">
       <div class="list-head"><div><div class="eyebrow">Achievements</div><h2>実績</h2></div></div>
@@ -543,6 +563,7 @@
         <div class="regions">${c.jpRegions.map(r => regCard(r, '地方')).join('')}</div></div>
       ${conts.map(cont => { const rs = c.worldRegions.filter(r => r.continent === cont); return `<div><div class="section-title"><h3>${cont}</h3><span class="mono muted">${rs.reduce((s, r) => s + r.got, 0)}/${rs.reduce((s, r) => s + r.total, 0)}か国</span></div><div class="regions">${rs.map(r => regCard(r)).join('')}</div></div>`; }).join('')}
     </div>`;
+    v.querySelectorAll('[data-movie]').forEach(b => b.onclick = () => TB.Movie.open({ type: 'region', id: b.dataset.movie }));
   }
 
   /* ================= SETTINGS ================= */
@@ -573,7 +594,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.2.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.3.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-export').onclick = async () => {
@@ -734,6 +755,6 @@
       });
     }
   }
-  TB.UI = { page, sheet, toast, filePick, picker, recalc, celebrate, refresh, openTrip, calc: () => state.calc };
+  TB.UI = { saveFile, page, sheet, toast, filePick, picker, recalc, celebrate, refresh, openTrip, calc: () => state.calc };
   boot();
 })();

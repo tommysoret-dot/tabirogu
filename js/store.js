@@ -82,9 +82,15 @@
       for (const k in this.settings.covers) if (this.settings.covers[k] === id) delete this.settings.covers[k];
     },
     getBlob(id) { return get('blobs', id); },
+    async saveMovie(key, blob) {
+      await put('blobs', { id: 'mv-' + key, full: blob, thumb: null });
+      this.settings.movies = this.settings.movies || {};
+      this.settings.movies[key] = { createdAt: Date.now(), type: blob.type, size: blob.size };
+      await this.saveSettings();
+    },
     async clearAll() {
       await tx(['trips', 'photos', 'blobs', 'meta'], 'readwrite', t => { ['trips', 'photos', 'blobs'].forEach(s => t.objectStore(s).clear()); });
-      this.trips = []; this.photos = []; URLS.clear();
+      this.trips = []; this.photos = []; this.settings.movies = {}; URLS.clear();
     },
     async requestPersist() {
       try {

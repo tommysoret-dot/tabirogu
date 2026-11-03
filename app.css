@@ -344,3 +344,9 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .tl-check.on { background: var(--stamp); border-color: var(--stamp); color: #fff; }
 .two > * { min-width: 0; }
 .field input, .field select { width: 100%; min-width: 0; }
+
+/* ---------- Phase 3: movie & celebration ---------- */
+.movie-wrap { display: flex; justify-content: center; }
+.movie-wrap canvas, .movie-wrap video { width: auto; height: min(58vh, 640px); max-width: 100%; aspect-ratio: 9 / 16; border-radius: 8px; box-shadow: var(--shadow); background: #222; }
+.mv-btn { grid-column: 1 / -1; justify-self: start; border: 1.5px solid var(--stamp); color: var(--stamp); background: transparent; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; }
+.confetti { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
