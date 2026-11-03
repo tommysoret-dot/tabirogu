@@ -204,9 +204,20 @@
   /* show a photo inside any box with a real <img> (iPhone Safari may not paint blob: URLs used as CSS backgrounds) */
   function setImg(el, url) {
     if (!el || !url) return;
-    if (el.tagName === 'IMG') { el.src = url; return; }
-    let im = [...el.children].find(c => c.classList && c.classList.contains('bgimg'));
-    if (!im) { im = document.createElement('img'); im.className = 'bgimg'; im.alt = ''; im.decoding = 'async'; el.prepend(im); }
+    let im = el;
+    if (el.tagName !== 'IMG') {
+      im = [...el.children].find(c => c.classList && c.classList.contains('bgimg'));
+      if (!im) { im = document.createElement('img'); im.className = 'bgimg'; im.alt = ''; el.prepend(im); }
+    }
+    const id = el.dataset.cov || el.dataset.cover || el.dataset.img || el.dataset.src;
+    im.onerror = async () => { // blob: URL refused → fall back to a data: URL
+      im.onerror = null;
+      try {
+        const b = await Store.getBlob(id); const blob = b && (b.thumb || b.full); if (!blob) return;
+        im.src = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(blob); });
+        TB.imgFallbacks = (TB.imgFallbacks || 0) + 1;
+      } catch (e) { TB.imgErrors = (TB.imgErrors || 0) + 1; }
+    };
     im.src = url;
   }
   window.TB = window.TB || {};
