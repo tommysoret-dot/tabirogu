@@ -613,7 +613,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });
@@ -723,7 +723,7 @@
       <button class="btn primary block" data-a="photos">${I.camera} 写真から旅をつくる</button>
       <button class="btn block" data-a="done">行った旅を記録する</button>
       <button class="btn block" data-a="plan">これからの旅を計画する</button>
-      <button class="btn block" data-a="kozy">KOZYBOOK（しおりHTML）から計画をつくる</button>
+      <button class="btn block" data-a="kozy">しおりHTML（KOZYBOOKなど）から計画をつくる</button>
       <p class="muted" style="font-size:12px;margin:0">写真を選ぶと、撮影日と位置情報から旅と都道府県・国を自動で振り分けます。</p></div>`, (el, close) => {
       el.querySelector('[data-a="photos"]').onclick = () => { close(); startImport(); };
       el.querySelector('[data-a="done"]').onclick = () => { close(); editTrip(Store.newTrip({ status: 'done' }), true); };
@@ -731,11 +731,11 @@
       el.querySelector('[data-a="kozy"]').onclick = async () => {
         close();
         const [f] = await filePick('.html,.htm,text/html', false); if (!f) return;
-        toast('KOZYBOOKを読み込んでいます…');
+        toast('しおりHTMLを読み込んでいます…');
         try {
           const t = await TB.Guide.createFromKozybook(f);
           recalc(); refresh(); await openTrip(t.id, 'guide');
-          toast(`「${t.title}」をつくりました。${t.startDate ? '' : '編集から日付を入れてください'}`);
+          toast(`「${t.title}」をつくりました（スポット${t._imported.spots}件${t._imported.days ? `・旅程${t._imported.days}日分` : ''}）。編集から日付を入れてください`);
         } catch (e) { toast(e.message); }
       };
     });

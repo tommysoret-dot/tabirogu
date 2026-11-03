@@ -33,9 +33,11 @@
     const old = t.days || [];
     if (!dates.length) { t.days = old.length ? old : [{ date: '', items: [] }]; return; }
     const byDate = new Map(old.filter(d => d.date).map(d => [d.date, d]));
-    const orphan = old.filter(d => !d.date || !dates.includes(d.date)).flatMap(d => d.items || []);
+    const undated = old.filter(d => !d.date);
+    const moved = old.filter(d => d.date && !dates.includes(d.date)).flatMap(d => d.items || []);
     t.days = dates.map(date => byDate.get(date) || { date, items: [] });
-    if (orphan.length) t.days[0].items.push(...orphan); // keep items when dates move
+    undated.forEach((d, i) => t.days[Math.min(i, t.days.length - 1)].items.push(...(d.items || []))); // DAY 1, DAY 2 … → dates
+    if (moved.length) t.days[0].items.push(...moved); // keep items when dates move
   }
   const dayLabel = (d, i) => d.date ? `${i + 1}日目 ${+d.date.slice(5, 7)}/${+d.date.slice(8)}(${WD[new Date(d.date + 'T00:00:00').getDay()]})` : `${i + 1}日目`;
 
@@ -59,12 +61,12 @@
     const went = g.spots.filter(s => s.result === 'went').length;
     let html = `
       <div class="guide-cover">
-        <div class="eyebrow">KOZYBOOK SERIES${t.startDate ? ' · ' + t.startDate.slice(0, 4) + ' EDITION' : ''}</div>
+        <div class="eyebrow">${/KOZYBOOK/i.test(g.subtitle || '') ? 'KOZYBOOK SERIES' : 'TRAVEL GUIDE'}${t.startDate ? ' · ' + t.startDate.slice(0, 4) + ' EDITION' : ''}</div>
         <div class="guide-sub" ${g.subtitle ? '' : 'hidden'}>${esc(g.subtitle)}</div>
         <div class="chips">${(g.tags || []).map(x => `<span class="chip">${esc(x)}</span>`).join('')}
           <span class="chip">📍 スポット ${g.spots.length}</span>${done && g.spots.length ? `<span class="chip">✔ 行った ${went}/${g.spots.length}</span>` : ''}</div>
         <button class="btn finder-btn" data-gact="find">🔍 スポットを探して追加</button>
-        <div class="row"><button class="btn small" data-gact="cover">表紙を編集</button><button class="btn small" data-gact="sections">セクション</button><button class="btn small" data-gact="kozy">KOZYBOOKから取り込む</button></div>
+        <div class="row"><button class="btn small" data-gact="cover">表紙を編集</button><button class="btn small" data-gact="sections">セクション</button><button class="btn small" data-gact="kozy">しおりHTMLを取り込む</button></div>
       </div>
       ${g.spots.length ? '<div id="gmapBox"></div>' : `<div class="guide-empty"><b>スポットを選ぶだけで、しおりができます</b><span>「スポットを探して追加」から、名前で検索するか、行き先の近くの観光・グルメ・カフェ・温泉を一覧で選べます。紹介文や写真、営業時間も自動で入ります。</span></div>`}`;
     g.sections.forEach((sec, si) => {
@@ -397,36 +399,169 @@
       return meta.id;
     } catch (e) { return null; }
   }
+  /* ================= generic HTML guide import (any style) ================= */
+  const NAME_RE = /(^|[-_])(c?name|spot|title|heading|ttl)$/i;
+  const NOT_NAME_RE = /(^|[-_])(section|sec|hero|site|nav|sky|band|page|footer|cover|main|header|lead|intro|marquee|logo)([-_]|$)/i;
+  const hasCls = (el, re) => [...el.classList].some(c => re.test(c));
+  function parseGeneric(html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style, noscript, svg, nav, template, canvas, video').forEach(e => e.remove());
+    const clean = s => (s || '').replace(/\s+/g, ' ').trim();
+    const txt = el => el ? clean(el.textContent) : '';
+    const inHero = el => !!el.closest('header, [class*="hero"], [class*="cover"], [class*="marquee"], footer');
+    // 1) name candidates: elements whose class ends with name/spot/title, or h3/h4
+    let cands = [...doc.body.querySelectorAll('*')].filter(el =>
+      !inHero(el) && txt(el) && txt(el).length <= 60 &&
+      ((el.classList.length && hasCls(el, NAME_RE) && !hasCls(el, NOT_NAME_RE)) || /^H[34]$/.test(el.tagName)));
+    cands = cands.filter(el => !cands.some(o => o !== el && el.contains(o))); // innermost only
+    const isCand = new Set(cands);
+    const countIn = el => cands.reduce((n, c) => n + (el.contains(c) ? 1 : 0), 0);
+    // 2) the card of each name = the largest ancestor that holds only this one name
+    const cards = [];
+    cands.forEach(nm => {
+      let card = nm;
+      while (card.parentElement && card.parentElement !== doc.body && countIn(card.parentElement) === 1) card = card.parentElement;
+      if (!cards.find(c => c.card === card)) cards.push({ nm, card });
+    });
+    if (!cards.length) throw new Error('このHTMLからスポットを見つけられませんでした');
+    // 3) section headers & day headers in document order
+    const before = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const headers = [...doc.body.querySelectorAll('h2, [class*="section-title"], [class*="sec-title"], [class*="band-title"], [class*="feature-title"]')].filter(h => !inHero(h) && !isCand.has(h) && txt(h));
+    const dayHeads = [...doc.body.querySelectorAll('[class*="day"]')].filter(d => /DAY\s*\d|\d\s*日目/i.test(txt(d)) && txt(d).length < 80 && !d.closest('[class*="tl-"]'))
+      .filter((d, i, a) => !a.some(o => o !== d && o.contains(d)));
+    const labelFor = h => {
+      const box = h.parentElement; if (!box) return '';
+      const l = [...box.children, ...(box.parentElement ? box.parentElement.children : [])].find(e => e !== h && e.classList && hasCls(e, /(^|[-_])(label|pill|eyebrow|kicker|en|badge)$/i) && txt(e).length < 30);
+      return l ? txt(l) : '';
+    };
+    const headInfo = h => { // a leading short <span> inside a heading is a label, not part of the title
+      const c = h.cloneNode(true); const f = c.firstElementChild;
+      const leadText = [...c.childNodes].slice(0, f ? [...c.childNodes].indexOf(f) : 0).map(n => n.textContent).join('').trim();
+      if (f && !leadText && txt(f).length < 30 && clean(c.textContent).length > txt(f).length + 1) { const l = txt(f); f.remove(); return { title: clean(c.textContent), pill: l }; }
+      return { title: txt(h), pill: labelFor(h) };
+    };
+    const title = clean((doc.title || '').split(/[｜|]/)[0]) || txt(doc.querySelector('h1'));
+    const hero = doc.querySelector('[class*="hero"], header') || doc.body;
+    const out = {
+      title,
+      subtitle: txt(doc.querySelector('h1')) !== title ? txt(doc.querySelector('h1')) : '',
+      tags: [...doc.querySelectorAll('[class*="hero-tag"], [class*="cover-tag"]')].filter(e => hasCls(e, /^(hero|cover)-tag$/)).map(txt).filter(Boolean).slice(0, 8),
+      cover: (hero.querySelector('img') || {}).getAttribute ? hero.querySelector('img').getAttribute('src') : null,
+      sections: [], days: []
+    };
+    const secMap = new Map();
+    cards.forEach(({ nm, card }) => {
+      const pick = re => [...card.querySelectorAll('*')].filter(e => e !== nm && !nm.contains(e) && e.classList.length && hasCls(e, re));
+      const firstTxt = re => { const e = pick(re)[0]; return e ? txt(e) : ''; };
+      const timeEl = pick(/(^|[-_])time$/i).find(e => /\d{1,2}[:：]\d{2}/.test(txt(e)));
+      const descs = pick(/desc|text|body-?copy|comment|detail/i).filter(e => !pick(/desc|text/i).some(o => o !== e && o.contains(e)));
+      let desc = descs.map(txt).filter(Boolean).join('\n');
+      if (!desc) desc = [...card.querySelectorAll('p')].map(txt).filter(Boolean).join('\n');
+      const tags = pick(/^(tag|t|chip|badge-tag)$|(^|[-_])tag$/i).map(txt).filter(t => t && t.length < 24);
+      const info = [];
+      card.querySelectorAll('.ik').forEach(k => { const v = k.nextElementSibling; if (v) info.push([txt(k), txt(v)]); });
+      card.querySelectorAll('dt').forEach(k => { const v = k.nextElementSibling; if (v && v.tagName === 'DD') info.push([txt(k), txt(v)]); });
+      card.querySelectorAll('tr').forEach(r => { const c = r.querySelectorAll('th, td'); if (c.length === 2) info.push([txt(c[0]), txt(c[1])]); });
+      const menu = pick(/menu-?item|(^|[-_])item$|price-?row/i).map(txt).filter(Boolean);
+      if (menu.length) info.push(['メニュー', menu.join('、')]);
+      const dist = firstTxt(/dist|access/i); if (dist) info.push(['アクセス', dist]);
+      const link = [...card.querySelectorAll('a[href]')].map(a => a.getAttribute('href')).find(h => /^https?:\/\//.test(h));
+      if (link && !info.some(([k]) => k === 'URL')) info.push(['URL', link]);
+      const img = card.querySelector('img'); const imgSrc = img ? img.getAttribute('src') : null;
+      const cat = firstTxt(/(^|[-_])(cat|category|genre|type)$/i);
+      const spot = {
+        name: txt(nm), nameEn: firstTxt(/(^|[-_])(sub|kana|en|ruby|yomi)$/i), area: firstTxt(/(^|[-_])(area|atag|loc|location|place)$/i),
+        label: firstTxt(/(^|[-_])(rank|lbl|label|badge|no)$/i), desc: desc.slice(0, 600), point: firstTxt(/point|tip|memo/i).slice(0, 200),
+        tags: cat ? [cat, ...tags] : tags, info, img: imgSrc, group: ''
+      };
+      if (timeEl) { // itinerary item
+        const di = Math.max(0, dayHeads.filter(d => before(d, card)).length - 1);
+        (out.days[di] = out.days[di] || []).push({ time: (txt(timeEl).match(/\d{1,2}[:：]\d{2}/) || [''])[0].replace('：', ':').padStart(5, '0'), title: spot.name, note: cat, spot: (imgSrc || link) ? spot : null });
+        return;
+      }
+      const h = headers.filter(x => before(x, card)).pop();
+      const key = h || 'none';
+      if (/。$/.test(spot.name) && !imgSrc && !link) return; // a closing sentence, not a place
+      if (!secMap.has(key)) { const hi = h ? headInfo(h) : null; const s = { pill: hi ? hi.pill : '', title: hi ? hi.title.slice(0, 40) : 'スポット', spots: [] }; secMap.set(key, s); out.sections.push(s); }
+      secMap.get(key).spots.push(spot);
+    });
+    // timeline places that are not already spots → "モデルコースのスポット"
+    const known = n => out.sections.some(s => s.spots.some(x => x.name.replace(/[（(].*$/, '') && (n.includes(x.name.replace(/[（(].*$/, '')) || x.name.includes(n))));
+    const extra = out.days.flat().filter(i => i.spot && !/到着|出発|移動|チェック|合流|ARRIVAL|帰路|帰宅/i.test(i.title + i.note) && !known(i.title)).map(i => i.spot);
+    if (extra.length) out.sections.push({ pill: '🗺 コース', title: 'モデルコースのスポット', spots: extra });
+    if (!out.sections.some(s => s.spots.length) && !out.days.length) throw new Error('このHTMLからスポットを見つけられませんでした');
+    return out;
+  }
+  const iconFor = (text) => /グルメ|食|牛タン|焼肉|ランチ|ディナー|LUNCH|DINNER|BREAKFAST|SHOP|寿司|ラーメン|居酒屋|定食|鍋/i.test(text) ? '🍴' : /カフェ|スイーツ|甘味/.test(text) ? '☕' : /温泉|スパ|サウナ|癒/.test(text) ? '♨' : /ラン|RUN|散歩|さんぽ|ウォーク/i.test(text) ? '🏃' : /宿|ホテル|旅館/.test(text) ? '🏨' : /市場|買|みやげ|土産|ショッピング|モール/.test(text) ? '🛍' : /コース/.test(text) ? '🗺' : '👀';
+  const catFor = (text) => ({ '🍴': 'food', '☕': 'cafe', '♨': 'relax', '🏨': 'stay', '🛍': 'shop' })[iconFor(text)] || 'sight';
+  function spotCat(ks, sp) { // the spot's own words first, then its section (unless the section mixes categories)
+    const own = catFor([sp.name, (sp.tags || []).join(' ')].join(' '));
+    if (own !== 'sight') return own;
+    const secText = [ks.title, ks.pill].join(' ');
+    return /スポット|観光|名所/.test(secText) ? 'sight' : catFor(secText);
+  }
+  function parseAny(html) {
+    if (/class="[^"]*\bcname\b/.test(html) && /class="[^"]*\bsec\b/.test(html)) { try { return parseKozybook(html); } catch (e) { } }
+    return parseGeneric(html);
+  }
+  const CITY_PREF = { 仙台: 4, 松島: 4, 札幌: 1, 函館: 1, 小樽: 1, 富良野: 1, 旭川: 1, 金沢: 17, 横浜: 14, 鎌倉: 14, 箱根: 14, 名古屋: 23, 神戸: 28, 姫路: 28, 博多: 40, 那覇: 47, 石垣: 47, 日光: 9, 軽井沢: 20, 伊勢: 24, 別府: 44, 湯布院: 44, 熱海: 22, 伊豆: 22, 道後: 38, 松山: 38, 高松: 37, 倉敷: 33, 出雲: 32, 草津: 10, 高山: 21, 白川郷: 21, 宮島: 34, 屋久島: 46, 嵐山: 26, 浅草: 13, 銀座: 13, 渋谷: 13, 新宿: 13, 舞浜: 12, 成田: 12, 盛岡: 3, 角館: 5, 弘前: 2, 青森: 2, 秋田: 5, 山形: 6, 蔵王: 6, 会津: 7, 宇都宮: 9, 川越: 11, 富士: 19, 河口湖: 19, 松本: 20, 長野: 20, 新潟: 15, 佐渡: 15, 富山: 16, 福井: 18, 岐阜: 21, 静岡: 22, 浜松: 22, 鳥羽: 24, 大津: 25, 彦根: 25, 和歌山: 30, 白浜: 30, 高野山: 30, 鳥取: 31, 松江: 32, 岡山: 33, 尾道: 34, 下関: 35, 萩: 35, 徳島: 36, 祖谷: 36, 高知: 39, 太宰府: 40, 佐賀: 41, 長崎: 42, 熊本: 43, 阿蘇: 43, 宮崎: 45, 高千穂: 45, 鹿児島: 46, 指宿: 46 };
+  function inferPlacesText(text) {
+    const s = new Set(inferPlaces(text));
+    Object.entries(CITY_PREF).forEach(([c, id]) => { if (text.includes(c)) s.add('jp:' + id); });
+    return [...s];
+  }
+
   async function importIntoTrip(t, html, onProgress) {
-    const k = parseKozybook(html);
+    const k = typeof html === 'string' ? parseAny(html) : html;
     ensure(t);
     const g = t.guide;
     if (!g.spots.length) g.sections = []; // replace the empty default sections
-    if (!g.subtitle) g.subtitle = k.title;
-    if (!(g.tags || []).length) g.tags = k.tags;
-    const total = k.sections.reduce((n, s) => n + s.spots.length, 0); let n = 0;
+    if (!g.subtitle) g.subtitle = k.subtitle || k.title;
+    if (!(g.tags || []).length) g.tags = k.tags || [];
+    const total = k.sections.reduce((n, s) => n + s.spots.length, 0) || 1; let n = 0;
+    const added = [];
     for (const ks of k.sections) {
-      let sec = g.sections.find(x => x.pill === ks.pill && x.title === ks.title);
-      if (!sec) { sec = { id: Store.uid('s'), pill: ks.pill || '📌', title: ks.title }; g.sections.push(sec); }
+      if (!ks.spots.length) continue;
+      const pill = ks.pill && /\p{Extended_Pictographic}/u.test(ks.pill) ? ks.pill : `${iconFor(ks.title + ' ' + ks.pill)} ${(ks.pill || '').replace(/^[A-Z][A-Z&'\s]+/, '').trim() || ((ks.title || '').split(/[\s　！!？?、。]/).find(Boolean) || '').slice(0, 10)}`;
+      let sec = g.sections.find(x => x.title === ks.title && x.pill === pill);
+      if (!sec) { sec = { id: Store.uid('s'), pill, title: ks.title }; g.sections.push(sec); }
       for (const sp of ks.spots) {
         const photoId = await guideImage(t, sp.img, sp.name);
-        g.spots.push({ id: Store.uid('sp'), sectionId: sec.id, name: sp.name, nameEn: sp.nameEn, area: sp.area, label: sp.label || sp.group, desc: sp.desc, point: sp.point, tags: sp.tags, info: sp.info, photoId, place: '', result: null, memo: '' });
+        const spot = { id: Store.uid('sp'), sectionId: sec.id, name: sp.name, nameEn: sp.nameEn || '', area: sp.area || '', label: sp.label || sp.group || '', desc: sp.desc || '', point: sp.point || '', tags: sp.tags || [], info: sp.info || [], photoId, place: '', result: null, memo: '', cat: spotCat(ks, sp) };
+        g.spots.push(spot); added.push(spot);
         onProgress && onProgress(++n / total);
       }
     }
+    // model course → itinerary (DAY 1, DAY 2, ...)
+    if ((k.days || []).some(d => d && d.length)) {
+      const base = norm => norm.replace(/[（(].*$/, '').replace(/\s+/g, '');
+      const link = title => { const b = base(title); const s = g.spots.find(x => base(x.name) && (b.includes(base(x.name)) || base(x.name).includes(b))); return s ? s.id : null; };
+      if (!t.startDate && (t.days || []).every(d => !d.items.length)) t.days = k.days.map(() => ({ date: '', items: [] }));
+      ensureDays(t);
+      k.days.forEach((items, di) => {
+        const day = t.days[Math.min(di, t.days.length - 1)];
+        (items || []).forEach(it => {
+          const spotId = link(it.title);
+          day.items.push({ id: Store.uid('i'), time: it.time, title: spotId ? '' : it.title, spotId, note: it.note || '', done: null });
+        });
+        day.items.sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+      });
+    }
     if (!t.coverPhotoId && k.cover) t.coverPhotoId = await guideImage(t, k.cover, k.title);
     if (!t.coverPhotoId) { const f = g.spots.find(s => s.photoId); if (f) t.coverPhotoId = f.photoId; }
-    if (!(t.places || []).length) t.places = inferPlaces(k.title + ' ' + k.tags.join(' '));
+    if (!(t.places || []).length) t.places = inferPlacesText([k.title, k.subtitle, (k.tags || []).join(' ')].join(' '));
+    if (!(t.places || []).length) t.places = inferPlacesText(added.map(s => s.name + ' ' + s.area).join(' ')).slice(0, 3);
     await Store.saveTrip(t);
-    return total;
+    return added.length;
   }
   async function createFromKozybook(file, onProgress) {
     const html = await file.text();
-    const k = parseKozybook(html); // validate first
-    const t = Store.newTrip({ status: 'plan', title: k.title.replace(/^KOZYBOOK\s*/, '').replace(/[〜~]/g, '').trim() || k.title });
-    await importIntoTrip(t, html, onProgress);
+    const k = parseAny(html); // validate first
+    const t = Store.newTrip({ status: 'plan', title: (k.title || '').replace(/^KOZYBOOK\s*/, '').replace(/[〜~]/g, '').trim() || '新しい旅' });
+    const n = await importIntoTrip(t, k, onProgress);
+    t._imported = { spots: n, days: (k.days || []).filter(d => d && d.length).length };
     return t;
   }
 
-  TB.Guide = { ensure, ensureDays, renderGuide, renderDays, parseKozybook, createFromKozybook, importIntoTrip, spotPhotoId };
+  TB.Guide = { ensure, ensureDays, renderGuide, renderDays, parseKozybook, parseGeneric, parseAny, createFromKozybook, importIntoTrip, spotPhotoId };
 })();
