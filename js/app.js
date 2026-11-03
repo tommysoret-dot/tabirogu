@@ -613,7 +613,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.4.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });

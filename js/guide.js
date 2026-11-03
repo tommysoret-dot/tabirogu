@@ -63,8 +63,10 @@
         <div class="guide-sub" ${g.subtitle ? '' : 'hidden'}>${esc(g.subtitle)}</div>
         <div class="chips">${(g.tags || []).map(x => `<span class="chip">${esc(x)}</span>`).join('')}
           <span class="chip">📍 スポット ${g.spots.length}</span>${done && g.spots.length ? `<span class="chip">✔ 行った ${went}/${g.spots.length}</span>` : ''}</div>
+        <button class="btn finder-btn" data-gact="find">🔍 スポットを探して追加</button>
         <div class="row"><button class="btn small" data-gact="cover">表紙を編集</button><button class="btn small" data-gact="sections">セクション</button><button class="btn small" data-gact="kozy">KOZYBOOKから取り込む</button></div>
-      </div>`;
+      </div>
+      ${g.spots.length ? '<div id="gmapBox"></div>' : `<div class="guide-empty"><b>スポットを選ぶだけで、しおりができます</b><span>「スポットを探して追加」から、名前で検索するか、行き先の近くの観光・グルメ・カフェ・温泉を一覧で選べます。紹介文や写真、営業時間も自動で入ります。</span></div>`}`;
     g.sections.forEach((sec, si) => {
       const spots = g.spots.filter(s => s.sectionId === sec.id);
       html += `<section class="gsec">
@@ -75,6 +77,9 @@
     const loose = g.spots.filter(s => !g.sections.find(x => x.id === s.sectionId));
     if (loose.length) html += `<section class="gsec"><div class="gsec-head"><span class="pill">その他</span></div><div class="spots">${loose.map((s, i) => spotCard(t, s, i)).join('')}</div></section>`;
     box.innerHTML = html;
+    box.querySelector('[data-gact="find"]').onclick = () => TB.Places.finder(t, rerender);
+    const gm = box.querySelector('#gmapBox');
+    if (gm) TB.Places.mountGuideMap(t, gm, s => spotEditor(t, s, rerender));
     await fillImages(box);
     box.querySelectorAll('[data-spot]').forEach(b => b.onclick = (e) => { if (e.target.closest('[data-res], a')) return; spotEditor(t, t.guide.spots.find(s => s.id === b.dataset.spot), rerender); });
     box.querySelectorAll('[data-addspot]').forEach(b => b.onclick = () => spotEditor(t, null, rerender, b.dataset.addspot));
@@ -119,6 +124,7 @@
         ${(s.tags || []).length ? `<div class="chips">${s.tags.map(x => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : ''}
         ${info.length ? `<dl class="spot-info">${info.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${infoValue(k, v)}</dd>`).join('')}</dl>` : ''}
         <div class="spot-links"><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([s.name, (s.area || '').split('/')[0]].join(' ').trim())}" target="_blank" rel="noopener">📍 地図で開く</a>${urlOf(s) ? `<a href="${esc(urlOf(s))}" target="_blank" rel="noopener">🔗 公式サイト</a>` : ''}</div>
+        ${s.credit ? `<div class="spot-credit">${esc(s.credit)}</div>` : ''}
         ${done && s.memo ? `<div class="spot-memo">${esc(s.memo)}</div>` : ''}
         ${done ? `<div class="res-row"><button data-res="went" data-sid="${s.id}" aria-pressed="${s.result === 'went'}">✔ 行った</button><button data-res="skip" data-sid="${s.id}" aria-pressed="${s.result === 'skip'}">行かなかった</button></div>` : ''}
       </div></article>`;
@@ -261,7 +267,7 @@
         </li>`;
     }).join('')}</ol>
       ${day.items.length ? '' : `<p class="muted">この日の予定はまだありません。${t.guide.spots.length ? 'しおりのスポットから組み立てられます。' : ''}</p>`}
-      <div class="row"><button class="btn primary small" data-add>＋ 予定を追加</button>${t.guide.spots.length ? '<button class="btn small" data-fromspot>スポットから追加</button>' : ''}</div>`;
+      <div class="row"><button class="btn primary small" data-add>＋ 予定を追加</button>${t.guide.spots.length ? '<button class="btn stamp small" data-auto>✨ 自動で組む</button>' : ''}${t.guide.spots.length ? '<button class="btn small" data-fromspot>スポットから追加</button>' : ''}</div>`;
     const again = () => renderDays(t, box, rerender, idx);
     box.querySelectorAll('[data-day]').forEach(b => b.onclick = () => renderDays(t, box, rerender, +b.dataset.day));
     box.querySelectorAll('[data-item]').forEach(b => b.onclick = () => itemEditor(t, idx, +b.dataset.item, again));
@@ -272,6 +278,24 @@
       await Store.saveTrip(t); again();
     });
     box.querySelector('[data-add]').onclick = () => itemEditor(t, idx, -1, again);
+    const au = box.querySelector('[data-auto]');
+    if (au) au.onclick = () => {
+      const has = t.days.some(d => d.items.some(i => i.spotId));
+      const noLoc = t.guide.spots.filter(s => !s.lat && s.result !== 'skip').length;
+      UI().sheet(`<div class="stack"><h3>旅程を自動で組む</h3>
+        <p style="margin:0;font-size:14px">しおりのスポット（「行かなかった」と宿を除く）を${t.days.length}日に分け、近い順に並べて時刻を入れます。グルメはランチ・ディナー、カフェは午後のひと休みに入れます。</p>
+        ${noLoc ? `<p class="muted" style="margin:0;font-size:13px">位置がわからないスポットが${noLoc}件あります。しおりタブの「地図にのせる」で位置を調べると、より近い順に組めます。</p>` : ''}
+        ${t.startDate ? '' : '<p class="muted" style="margin:0;font-size:13px">日付が未設定なので1日分として組みます。</p>'}
+        ${has ? `<div class="radio-row"><label><input type="radio" name="am" value="replace" checked> スポットの予定を組み直す（手入力の予定は残す）</label><label><input type="radio" name="am" value="add"> まだ旅程にないスポットだけ追加</label></div>` : ''}
+        <button class="btn primary" data-go>組む</button></div>`, (el, close) => {
+        el.querySelector('[data-go]').onclick = async () => {
+          const m = el.querySelector('input[name=am]:checked'); const mode = m ? m.value : 'replace';
+          const r = TB.Places.autoItinerary(t, mode);
+          await Store.saveTrip(t); close(); renderDays(t, box, rerender, 0);
+          UI().toast(`${r.placed}件の予定を組みました。時刻はタップして調整できます`);
+        };
+      });
+    };
     const fs = box.querySelector('[data-fromspot]');
     if (fs) fs.onclick = () => UI().sheet(`<div class="stack"><h3>${esc(dayLabel(day, idx))}に追加</h3><div class="mini-trips">${t.guide.spots.map(s => `<button data-s="${s.id}"><span>${esc(s.name)}</span><span class="muted" style="font-size:12px">${esc(s.area || '')}</span></button>`).join('')}</div></div>`, (el, close) => {
       el.querySelectorAll('[data-s]').forEach(b => b.onclick = async () => {

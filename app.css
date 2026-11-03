@@ -393,3 +393,27 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .countdown { color: var(--stamp); font-weight: 700; }
 .spot-links { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
 .spot-links a, .spot-info a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+
+/* ---------- v0.5: spot finder & spot map ---------- */
+.finder-btn { background: var(--paper-2); color: var(--ink) !important; border-color: var(--paper-2) !important; font-size: 15px; padding: 11px 16px; }
+.guide-empty { border: 1.5px dashed var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.guide-empty span { color: var(--ink-soft); font-size: 13px; }
+.gmap, .fmap { height: 260px; border-radius: 8px; overflow: hidden; box-shadow: var(--shadow); z-index: 0; }
+.fmap { height: 220px; }
+.gmap-bar { margin-top: 8px; }
+.spot-pin span { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); color: #fff; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,.35); }
+.spot-pin span { font: 700 12px var(--font-mono); }
+.spot-pin b { transform: rotate(45deg); font-weight: 700; }
+.leaflet-container { font-family: var(--font-body); background: var(--paper-3); }
+.spot-credit { font-size: 10px; color: var(--ink-soft); }
+.cand-list { display: flex; flex-direction: column; gap: 8px; }
+.cand { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; background: var(--paper-2); border-radius: 6px; padding: 10px 10px 10px 12px; border: 1px solid var(--line); }
+.cand-ic { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 17px; }
+.cand-b { display: flex; flex-direction: column; min-width: 0; }
+.cand-b b { font-family: var(--font-hand); font-size: 16px; }
+.cand-b span { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cand-note { color: var(--ok) !important; }
+.cand-add { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--stamp); color: var(--stamp); background: transparent; font-size: 20px; }
+.cand-add.on { background: var(--stamp); color: #fff; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper-2); border-color: var(--ink); }
+button.chip { cursor: pointer; }
