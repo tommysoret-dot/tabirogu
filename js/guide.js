@@ -1,4 +1,4 @@
-/* TABRIOGU — しおり (guide): sections & spots, day itinerary, KOZYBOOK import */
+/* TABIROGU — しおり (guide): sections & spots, day itinerary, KOZYBOOK import */
 (function () {
   const { Store, URLS, Geo, Photos } = TB;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -50,7 +50,7 @@
   async function fillImages(root) {
     for (const el of root.querySelectorAll('[data-img]')) {
       const u = await URLS.get(el.dataset.img); if (!u) continue;
-      if (el.tagName === 'IMG') el.src = u; else el.style.backgroundImage = `url(${u})`;
+      TB.setImg(el, u);
     }
   }
 

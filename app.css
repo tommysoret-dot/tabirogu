@@ -425,3 +425,11 @@ button.chip { cursor: pointer; }
 .cover-name { font: 12px var(--font-hand); color: var(--ink-soft); }
 .cover-strip { position: absolute; left: 4px; right: 4px; bottom: 4px; display: flex; gap: 3px; }
 .cover-strip i { flex: 1; aspect-ratio: 1; max-width: 32px; background: #ccc center/cover; border: 2px solid #fbf9f4; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+
+/* ---------- v0.5.4: photos as <img> (iPhone Safari) ---------- */
+.bgimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; z-index: 0; border-radius: inherit; }
+.ticket .cover, .cover-strip i, .otd-strip i, .strip button, .spot-photo { position: relative; overflow: hidden; }
+.cover-strip { z-index: 1; }
+.spot-lbl, .spot-no, .went-stamp { z-index: 1; }
+.strip button.is-cover::after { z-index: 1; }
+.spot-photo:not([data-img])::after { z-index: 1; }

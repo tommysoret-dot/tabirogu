@@ -1,4 +1,4 @@
-/* TABRIOGU — spot search with free open data (OpenStreetMap Nominatim/Overpass + Wikipedia/Wikidata),
+/* TABIROGU — spot search with free open data (OpenStreetMap Nominatim/Overpass + Wikipedia/Wikidata),
    spot map (Leaflet + OSM tiles) and automatic itinerary. No API key needed. */
 (function () {
   const { Store, Geo, Photos } = TB;

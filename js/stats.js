@@ -1,4 +1,4 @@
-/* TABRIOGU — Phase 4: statistics, titles (称号), on-this-day */
+/* TABIROGU — Phase 4: statistics, titles (称号), on-this-day */
 (function () {
   const { Store, URLS, Geo, Photos } = TB;
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -124,7 +124,7 @@
       ${m.photos.length ? `<div class="otd-strip">${m.photos.map(p => `<i data-img="${p.id}"></i>`).join('')}</div>` : ''}
       ${list.length > 1 ? `<span class="muted" style="font-size:12px">ほか${list.length - 1}件の思い出</span>` : ''}</button>`;
   }
-  async function fill(root) { for (const el of root.querySelectorAll('[data-img]')) { const u = await URLS.get(el.dataset.img); if (u) el.style.backgroundImage = `url(${u})`; } }
+  async function fill(root) { for (const el of root.querySelectorAll('[data-img]')) { const u = await URLS.get(el.dataset.img); if (u) TB.setImg(el, u); } }
   async function maybeShowOnLaunch() {
     const today = Photos.localDate(Date.now());
     if (Store.settings.lastOTD === today) return;

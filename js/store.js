@@ -1,4 +1,4 @@
-/* TABRIOGU — storage layer (IndexedDB) and ZIP import/export */
+/* TABIROGU — storage layer (IndexedDB) and ZIP import/export */
 (function () {
   const DB_NAME = 'tabriogu', DB_VER = 1;
   let dbp = null;
@@ -150,9 +150,9 @@
     async readZip(file) {
       const zip = await JSZip.loadAsync(file);
       const jf = zip.file('tabriogu.json');
-      if (!jf) throw new Error('TABRIOGUのZIPではありません（tabriogu.json が見つかりません）');
+      if (!jf) throw new Error('TABIROGUのZIPではありません（tabriogu.json が見つかりません）');
       const data = JSON.parse(await jf.async('string'));
-      if (data.format !== 'tabriogu') throw new Error('TABRIOGUのZIPではありません');
+      if (data.format !== 'tabriogu') throw new Error('TABIROGUのZIPではありません');
       return { zip, data };
     },
     async importZip({ zip, data }, mode, onProgress) {
@@ -201,6 +201,14 @@
     clear() { this.m.forEach(u => URL.revokeObjectURL(u)); this.m.clear(); }
   };
 
+  /* show a photo inside any box with a real <img> (iPhone Safari may not paint blob: URLs used as CSS backgrounds) */
+  function setImg(el, url) {
+    if (!el || !url) return;
+    if (el.tagName === 'IMG') { el.src = url; return; }
+    let im = [...el.children].find(c => c.classList && c.classList.contains('bgimg'));
+    if (!im) { im = document.createElement('img'); im.className = 'bgimg'; im.alt = ''; im.decoding = 'async'; el.prepend(im); }
+    im.src = url;
+  }
   window.TB = window.TB || {};
-  TB.Store = Store; TB.URLS = URLS;
+  TB.Store = Store; TB.URLS = URLS; TB.setImg = setImg;
 })();

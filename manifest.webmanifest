@@ -1,6 +1,6 @@
 {
-  "name": "TABRIOGU ふたりの旅帳",
-  "short_name": "TABRIOGU",
+  "name": "TABIROGU ふたりの旅帳",
+  "short_name": "TABIROGU",
   "start_url": "./index.html#map",
   "scope": "./",
   "display": "standalone",

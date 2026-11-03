@@ -1,4 +1,4 @@
-/* TABRIOGU — 思い出ムービー: canvas slideshow + generated music-box BGM, recorded with MediaRecorder */
+/* TABIROGU — 思い出ムービー: canvas slideshow + generated music-box BGM, recorded with MediaRecorder */
 (function () {
   const { Store, URLS, Geo } = TB;
   const W = 720, H = 1280, FPS = 30;
@@ -138,7 +138,7 @@
     paper(ctx);
     ctx.save(); ctx.globalAlpha = ease(u * 2);
     ctx.fillStyle = C.ink; ctx.textAlign = 'center';
-    ctx.font = `700 26px ${MONO}`; ctx.fillText('T A B R I O G U', W / 2, 160);
+    ctx.font = `700 26px ${MONO}`; ctx.fillText('T A B I R O G U', W / 2, 160);
     ctx.font = `28px ${HAND}`; ctx.fillStyle = C.soft; ctx.fillText(book, W / 2, 206);
     tape(ctx, W / 2 - 150, 330, 170, -.08, C.tape);
     ctx.fillStyle = C.ink; textFit(ctx, plan.title, W - 120, `600 92px ${HAND}`); ctx.fillText(plan.title, W / 2, 470);
@@ -235,7 +235,7 @@
       stamp(ctx, W / 2, 500, 170, 'また\n行こう', u * 2.2);
       ctx.globalAlpha = ease((u - .35) * 3);
     }
-    ctx.fillStyle = C.ink; ctx.font = `700 26px ${MONO}`; ctx.fillText('T A B R I O G U', W / 2, H - 200);
+    ctx.fillStyle = C.ink; ctx.font = `700 26px ${MONO}`; ctx.fillText('T A B I R O G U', W / 2, H - 200);
     ctx.font = `28px ${HAND}`; ctx.fillStyle = C.soft; ctx.fillText(book, W / 2, H - 155);
     ctx.globalAlpha = 1;
     if (u > .82) { ctx.fillStyle = `rgba(235,227,210,${(u - .82) / .18})`; ctx.fillRect(0, 0, W, H); }

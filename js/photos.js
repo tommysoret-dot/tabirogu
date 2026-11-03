@@ -1,4 +1,4 @@
-/* TABRIOGU — photo processing: EXIF, resize, grouping into trips */
+/* TABIROGU — photo processing: EXIF, resize, grouping into trips */
 (function () {
   const FULL = 1600, THUMB = 600;
   async function decode(file) {

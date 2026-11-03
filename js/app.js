@@ -1,4 +1,4 @@
-/* TABRIOGU — UI */
+/* TABIROGU — UI */
 (function () {
   const { Store, URLS, Geo, Photos } = TB;
   const $ = (s, el = document) => el.querySelector(s);
@@ -196,7 +196,7 @@
         ${trips.length ? `<div class="mini-trips">${trips.map(t => `<button data-trip="${t.id}"><span>${esc(t.title || '無題の旅')}</span><span class="mono muted" style="font-size:12px">${fmtDate(t.startDate)} ${t.status === 'plan' ? '予定' : ''}</span></button>`).join('')}</div>` : '<p class="muted" style="margin:0">まだこの場所の旅はありません。</p>'}
         <div class="row"><button class="btn primary" data-new="done">${esc(name)}の旅を記録</button><button class="btn" data-new="plan">計画する</button></div>
       </div>`, async (el, close) => {
-      for (const b of el.querySelectorAll('[data-cover]')) b.style.backgroundImage = `url(${await URLS.get(b.dataset.cover)})`;
+      for (const b of el.querySelectorAll('[data-cover]')) TB.setImg(b, await URLS.get(b.dataset.cover));
       el.querySelectorAll('[data-cover]').forEach(b => b.onclick = async () => {
         Store.settings.covers[key] = b.dataset.cover; await Store.saveSettings();
         el.querySelectorAll('[data-cover]').forEach(x => x.classList.toggle('is-cover', x === b));
@@ -246,7 +246,7 @@
     v.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     v.querySelectorAll('[data-sample]').forEach(b => b.onclick = loadSample);
     v.querySelectorAll('[data-import]').forEach(b => b.onclick = startImport);
-    for (const el of v.querySelectorAll('[data-cov]')) if (el.dataset.cov) { const u = await URLS.get(el.dataset.cov); if (u) el.style.backgroundImage = `url(${u})`; }
+    for (const el of v.querySelectorAll('[data-cov]')) if (el.dataset.cov) { const u = await URLS.get(el.dataset.cov); if (u) TB.setImg(el, u); }
   }
   /* photos to show for a trip: chosen cover → memories → spot photos of the しおり */
   function tripPhotos(t) {
@@ -327,7 +327,7 @@
         toast('ZIPを作成中…');
         try {
           const blob = await Store.exportZip(null, [t.id]);
-          const ok = await saveFile(blob, `tabriogu_${(t.title || 'trip').replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`);
+          const ok = await saveFile(blob, `tabirogu_${(t.title || 'trip').replace(/[\\/:*?"<>|\s]+/g, '_')}.zip`);
           if (ok) toast('このしおりをZIPで書き出しました。相手は設定 →「ZIPを読み込む」で追加できます');
         } catch (e) { toast('書き出しに失敗しました：' + e.message); }
       };
@@ -635,8 +635,8 @@
         <p class="muted">${hasSample ? 'サンプルの旅が入っています。自分の旅を入れる前に削除できます。' : '動作を試すためのサンプルの旅（5件）を入れられます。'}</p>
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
-      <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.3 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABIROGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.5.5 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });
@@ -644,7 +644,7 @@
       const bar = $('#zipProg'); bar.hidden = false;
       try {
         const blob = await Store.exportZip(p => { bar.firstElementChild.style.width = (p * 100) + '%'; });
-        const d = new Date(); const fn = `tabriogu_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.zip`;
+        const d = new Date(); const fn = `tabirogu_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.zip`;
         const ok = await saveFile(blob, fn);
         toast(ok ? `${fn} を書き出しました（${(blob.size / 1048576).toFixed(1)}MB）` : '書き出しをキャンセルしました');
       } catch (e) { toast('書き出しに失敗しました：' + e.message); }

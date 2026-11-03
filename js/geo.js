@@ -1,4 +1,4 @@
-/* TABRIOGU — map data, regions, location lookup, conquest & points */
+/* TABIROGU — map data, regions, location lookup, conquest & points */
 (function () {
   const JP_REGIONS = [
     { id: 'hokkaido', name: '北海道', prefs: [1] },
