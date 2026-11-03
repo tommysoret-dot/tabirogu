@@ -38,7 +38,8 @@
       [...this.jp.features, ...this.world.features].forEach(rewind);
       this.jp.features.forEach(f => { f.key = 'jp:' + f.properties.id; this.prefName[f.properties.id] = f.properties.name; });
       this.jp.features.sort((a, b) => a.properties.id - b.properties.id);
-      this.world.features.forEach(f => { const p = f.properties; f.key = 'w:' + p.c; this.countryName[p.c] = p.n; this.countryRegion[p.c] = p.r; });
+      const NAME_FIX = { TW: '台湾' };
+      this.world.features.forEach(f => { const p = f.properties; if (NAME_FIX[p.c]) p.n = NAME_FIX[p.c]; f.key = 'w:' + p.c; this.countryName[p.c] = p.n; this.countryRegion[p.c] = p.r; });
       this.worldRegions = [];
       UN_REGIONS.forEach(([cont, subs]) => subs.forEach(([id, name]) => {
         const members = this.world.features.filter(f => f.properties.r === id && (f.properties.i || f.properties.c === 'TW')).map(f => f.properties.c);

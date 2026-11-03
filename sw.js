@@ -1,7 +1,7 @@
 /* TABRIOGU service worker — network-first (always the latest version when online), cache fallback offline */
-const VERSION = '0.3.0';
+const VERSION = '0.4.0';
 const CACHE = 'tabriogu-v' + VERSION;
-const CORE = ['./', './index.html', './app.css', './manifest.webmanifest', './js/store.js', './js/geo.js', './js/photos.js', './js/app.js', './js/guide.js', './js/movie.js',
+const CORE = ['./', './index.html', './app.css', './manifest.webmanifest', './js/store.js', './js/geo.js', './js/photos.js', './js/app.js', './js/guide.js', './js/movie.js', './js/stats.js',
   './data/japan.topo.json', './data/world.topo.json', './icons/icon-192.png'];
 const CDN = ['https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js', 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js',
   'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js', 'https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js'];

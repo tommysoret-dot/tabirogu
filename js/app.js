@@ -18,7 +18,7 @@
   const nights = (a, b) => { if (!a || !b) return ''; const n = Math.round((new Date(b) - new Date(a)) / 864e5); return n > 0 ? `${n}泊${n + 1}日` : '日帰り'; };
 
   let state = { tab: 'map', mapMode: 'jp', tripFilter: 'all', calc: null };
-  const recalc = () => { state.calc = Geo.compute(Store.trips, Store.photos); $('#ptsVal').textContent = state.calc.points.toLocaleString(); };
+  const recalc = () => { state.calc = Geo.compute(Store.trips, Store.photos); $('#ptsVal').textContent = state.calc.points.toLocaleString(); if (TB.Stats) TB.Stats.check(); };
 
   /* ---------- downloads (works in published artifact and on a normal site) ---------- */
   async function saveFile(blob, filename) {
@@ -215,6 +215,7 @@
     const needBackup = Store.photos.length > 0 && (!Store.settings.lastExport || Date.now() - Store.settings.lastExport > 30 * 864e5);
     v.innerHTML = `
       ${needBackup ? `<div class="banner"><p>写真は端末のブラウザ内だけに保存されています。月に1回はZIPでバックアップしておくと安心です。</p><button class="btn small stamp" data-go="prefs">バックアップ</button></div>` : ''}
+      ${TB.Stats.otdCard(TB.Stats.onThisDay())}
       <div class="list-head">
         <div><div class="eyebrow">${esc(Store.settings.bookName)}</div><h2>旅帳</h2></div>
         <div class="seg filter" role="group" aria-label="絞り込み">
@@ -235,6 +236,8 @@
           </div></button>`;
     }).join('')}</div>` : emptyTrips()}`;
     v.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.tripFilter = b.dataset.f; renderTrips(); });
+    v.querySelectorAll('[data-otd]').forEach(b => b.onclick = () => openTrip(b.dataset.otd, 'photos'));
+    TB.Stats.fill(v);
     v.querySelectorAll('[data-trip]').forEach(b => b.onclick = () => openTrip(b.dataset.trip));
     v.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     v.querySelectorAll('[data-sample]').forEach(b => b.onclick = loadSample);
@@ -558,12 +561,15 @@
       <div class="list-head"><div><div class="eyebrow">Achievements</div><h2>実績</h2></div></div>
       <div class="score tape"><div><div class="eyebrow">合計</div><div class="big">${c.points.toLocaleString()}<small style="font-size:16px">pt</small></div></div>
         <dl><dt>都道府県 ${c.jpCount}/47</dt><dd>${c.jpCount * P.pref}pt</dd><dt>国・地域 ${c.wCount}</dt><dd>${c.wCount * P.country}pt</dd><dt>制覇ボーナス</dt><dd>${c.bonus}pt</dd></dl></div>
+      ${(() => { const b = TB.Stats.currentTitle(); return b ? `<p style="margin:0">いまの称号：<b>${b.icon} ${esc(b.name)}</b></p>` : ''; })()}
+      <div id="statsP4" class="stack" style="gap:24px"></div>
       <p class="muted" style="margin:0;font-size:13px">都道府県の初訪問 +${P.pref}pt、国の初訪問 +${P.country}pt。地方をすべて訪れると「構成数×${P.bonusPer}pt」のボーナス。世界の地方は国連の地域区分で、独立国（＋台湾）が対象です。</p>
       <div><div class="section-title"><h3>日本の地方</h3><span class="mono muted">${c.jpRegions.filter(r => r.done).length}/8 制覇</span></div>
         <div class="regions">${c.jpRegions.map(r => regCard(r, '地方')).join('')}</div></div>
       ${conts.map(cont => { const rs = c.worldRegions.filter(r => r.continent === cont); return `<div><div class="section-title"><h3>${cont}</h3><span class="mono muted">${rs.reduce((s, r) => s + r.got, 0)}/${rs.reduce((s, r) => s + r.total, 0)}か国</span></div><div class="regions">${rs.map(r => regCard(r)).join('')}</div></div>`; }).join('')}
     </div>`;
     v.querySelectorAll('[data-movie]').forEach(b => b.onclick = () => TB.Movie.open({ type: 'region', id: b.dataset.movie }));
+    TB.Stats.render($('#statsP4'));
   }
 
   /* ================= SETTINGS ================= */
@@ -575,7 +581,8 @@
     const hasSample = Store.trips.some(t => t.sample);
     v.innerHTML = `<div class="stack">
       <div class="list-head"><div><div class="eyebrow">Settings</div><h2>設定</h2></div></div>
-      <div class="card"><label class="field">旅帳の名前<input id="s-name" value="${esc(Store.settings.bookName)}" placeholder="例：こうじ & ゆり の旅帳"></label></div>
+      <div class="card"><label class="field">旅帳の名前<input id="s-name" value="${esc(Store.settings.bookName)}" placeholder="例：こうじ & ゆり の旅帳"></label>
+        <div class="field">出発地（家）<div class="row"><span class="chip">${esc(Geo.placeName(Store.settings.home || 'jp:13'))}</span><button class="btn small" id="s-home">変更</button></div><span class="muted" style="font-size:12px">移動距離と「いちばん遠い場所」の計算に使います</span></div></div>
       <div class="card">
         <h3>ZIPで共有・バックアップ</h3>
         <p class="muted">旅・写真・表紙の設定をまとめて1つのZIPにします。相手が「ZIPを読み込む」と、旅帳と地図に反映されます。</p>
@@ -594,9 +601,10 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.3.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.4.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
+    $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });
     $('#s-export').onclick = async () => {
       const bar = $('#zipProg'); bar.hidden = false;
       try {
@@ -740,6 +748,7 @@
     recalc();
     const h = (location.hash || '').slice(1);
     go(['map', 'trips', 'stats', 'prefs'].includes(h) ? h : (Store.trips.length ? 'map' : 'trips'));
+    setTimeout(() => TB.Stats.maybeShowOnLaunch(), 900);
     window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t !== state.tab && ['map', 'trips', 'stats', 'prefs'].includes(t)) go(t); });
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (state.tab === 'map') MapView.draw(); }, 200); });
     if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.hostname.endsWith('claude.ai') && !location.hostname.includes('claudeusercontent')) {

@@ -350,3 +350,39 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
 .movie-wrap canvas, .movie-wrap video { width: auto; height: min(58vh, 640px); max-width: 100%; aspect-ratio: 9 / 16; border-radius: 8px; box-shadow: var(--shadow); background: #222; }
 .mv-btn { grid-column: 1 / -1; justify-self: start; border: 1.5px solid var(--stamp); color: var(--stamp); background: transparent; border-radius: 999px; padding: 2px 12px; font-size: 12px; font-weight: 700; }
 .confetti { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+
+/* ---------- Phase 4: stats, titles, on this day ---------- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.kpis > div { background: var(--paper-2); border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: flex; flex-direction: column; gap: 2px; }
+.kpis b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpis b small { font-size: 14px; margin-left: 2px; }
+.kpis span { font-size: 12px; color: var(--ink-soft); }
+.chart-scroll { overflow-x: auto; }
+.chart-scroll svg { display: block; max-width: none; }
+.two-col { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 22px; }
+.seasons { display: flex; flex-direction: column; gap: 8px; }
+.seasons > div { display: grid; grid-template-columns: 24px 1fr 28px; gap: 8px; align-items: center; font-family: var(--font-hand); }
+.seasons i { height: 12px; border-radius: 6px; background: linear-gradient(90deg, var(--ink) var(--w), var(--paper-3) var(--w)); }
+.seasons b { text-align: right; }
+.top5 { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.top5 li { padding-left: 4px; }
+.top5 li::marker { font-family: var(--font-mono); font-weight: 700; color: var(--stamp); }
+.top5 li { display: list-item; }
+.top5 li span { display: inline-block; min-width: 9em; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.badge-card { border: 1.5px dashed var(--line); border-radius: 8px; padding: 12px 10px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; color: var(--ink-soft); }
+.badge-card .b-icon { font-size: 30px; filter: grayscale(1); opacity: .45; }
+.badge-card b { font-family: var(--font-hand); font-size: 15px; }
+.badge-card .b-cond { font-size: 11px; line-height: 1.4; }
+.badge-card .b-date { font-size: 11px; }
+.badge-card .b-prog { width: 80%; height: 4px; border-radius: 2px; background: var(--paper-3); overflow: hidden; }
+.badge-card .b-prog i { display: block; height: 100%; background: var(--ink-soft); }
+.badge-card.got { border: 2px solid var(--stamp); color: var(--ink); background: var(--paper-2); }
+.badge-card.got .b-icon { filter: none; opacity: 1; }
+.badge-card.got b { color: var(--stamp); }
+.otd { display: flex; flex-direction: column; gap: 8px; width: 100%; text-align: left; border: 0; background: var(--paper-2); box-shadow: var(--shadow); border-radius: 6px; padding: 18px 14px 14px; margin: 6px 0 14px; --tape-color: var(--tape-4); }
+.otd-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.otd-badge { background: var(--stamp); color: #fff; font: 700 13px var(--font-hand); padding: 2px 10px; border-radius: 999px; }
+.otd-title { font: 600 18px var(--font-hand); }
+.otd-strip { display: flex; gap: 6px; overflow: hidden; }
+.otd-strip i { flex: 0 0 auto; width: 72px; height: 72px; border: 3px solid #fbf9f4; box-shadow: var(--shadow); background: #ccc center/cover; }
