@@ -231,7 +231,7 @@
       const sp = (t.guide && t.guide.spots || []).length;
       const places = (t.places || []).slice(0, 3).map(k => Geo.placeName(k)).join('・');
       return `${head}<button class="ticket tape" data-trip="${t.id}">
-          <div class="cover" data-cov="${t.coverPhotoId || ''}">${t.coverPhotoId ? '' : (t.status === 'plan' ? 'これから' : 'no photo')}</div>
+          ${(() => { const ph = tripPhotos(t); return `<div class="cover" data-cov="${ph[0] || ''}">${ph[0] ? '' : placeShape(t)}${ph.length > 1 ? `<span class="cover-strip">${ph.slice(1, 4).map(id => `<i data-cov="${id}"></i>`).join('')}</span>` : ''}</div>`; })()}
           <div class="body">
             <div class="date">${fmtRange(t.startDate, t.endDate)}</div>
             <h3>${esc(t.title || '無題の旅')}</h3>
@@ -246,7 +246,29 @@
     v.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     v.querySelectorAll('[data-sample]').forEach(b => b.onclick = loadSample);
     v.querySelectorAll('[data-import]').forEach(b => b.onclick = startImport);
-    for (const el of v.querySelectorAll('[data-cov]')) if (el.dataset.cov) el.style.backgroundImage = `url(${await URLS.get(el.dataset.cov)})`;
+    for (const el of v.querySelectorAll('[data-cov]')) if (el.dataset.cov) { const u = await URLS.get(el.dataset.cov); if (u) el.style.backgroundImage = `url(${u})`; }
+  }
+  /* photos to show for a trip: chosen cover → memories → spot photos of the しおり */
+  function tripPhotos(t) {
+    const have = new Set(Store.photos.filter(p => p.tripId === t.id).map(p => p.id));
+    const mem = Store.photos.filter(p => p.tripId === t.id && p.kind !== 'guide').sort((a, b) => a.takenAt - b.takenAt).map(p => p.id);
+    const guide = ((t.guide && t.guide.spots) || []).map(s => TB.Guide.spotPhotoId(t, s)).filter(Boolean);
+    const rest = Store.photos.filter(p => p.tripId === t.id && p.kind === 'guide').map(p => p.id);
+    const list = [t.coverPhotoId, ...(t.status === 'done' ? [...mem, ...guide] : [...guide, ...mem]), ...rest].filter(id => id && have.has(id));
+    return [...new Set(list)];
+  }
+  /* no photo at all: draw the outline of the destination */
+  function placeShape(t) {
+    const k = (t.places || []).find(x => x !== 'w:JP') || (t.places || [])[0];
+    const f = k && Geo.feature(k);
+    if (!f) return `<span>${t.status === 'plan' ? 'これから' : 'no photo'}</span>`;
+    let shape = f;
+    if (f.geometry && f.geometry.type === 'MultiPolygon' && k.startsWith('w:')) { // overseas territories make the main land tiny
+      const big = f.geometry.coordinates.slice().sort((x, y) => d3.geoArea({ type: 'Polygon', coordinates: y }) - d3.geoArea({ type: 'Polygon', coordinates: x }))[0];
+      shape = { type: 'Feature', geometry: { type: 'Polygon', coordinates: big } };
+    }
+    const path = d3.geoPath(d3.geoMercator().fitExtent([[10, 10], [102, 102]], shape))(shape);
+    return `<svg viewBox="0 0 112 112" class="cover-shape" aria-hidden="true"><path d="${path}"/></svg><span class="cover-name">${esc(Geo.placeName(k))}</span>`;
   }
   function emptyTrips() {
     return `<div class="empty"><div class="stampmark">旅帳<br>白紙</div>
@@ -613,7 +635,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABRIOGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABRIOGU v0.5.2 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-home').onclick = () => picker([Store.settings.home || 'jp:13'], false, async ([k]) => { Store.settings.home = k; await Store.saveSettings(); renderSettings(); });
