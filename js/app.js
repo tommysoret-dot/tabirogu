@@ -290,7 +290,7 @@
     } catch (e) { blobTest = 'NG ' + e.message; }
     const rows = [
       ['端末', navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 120)],
-      ['アプリ', 'v0.6.0' + (navigator.serviceWorker && navigator.serviceWorker.controller ? ' / SWあり' : ' / SWなし') + (matchMedia('(display-mode: standalone)').matches ? ' / ホーム画面' : ' / ブラウザ')],
+      ['アプリ', 'v0.6.1' + (navigator.serviceWorker && navigator.serviceWorker.controller ? ' / SWあり' : ' / SWなし') + (matchMedia('(display-mode: standalone)').matches ? ' / ホーム画面' : ' / ブラウザ')],
       ['写真', `${Store.photos.length}枚（読めない ${Store.brokenImages || 0}）`],
       ['写真の読み込み', blobTest],
       ['表紙の枠', cv ? `${Math.round(r.width)}×${Math.round(r.height)} / display:${cs.display} / bg:${cs.backgroundColor} / 子要素${cv.children.length}` : 'なし'],
@@ -674,7 +674,7 @@
         <div class="row">${hasSample ? '<button class="btn stamp" id="s-unsample">サンプルを削除</button>' : '<button class="btn" id="s-sample">サンプルを入れる</button>'}</div>
       </div>
       <div class="card" id="wipe"><h3>すべて削除</h3><p class="muted">この端末のTABIROGUのデータをすべて消します。先にZIPで書き出しておいてください。</p><div class="row"><button class="btn stamp small" id="s-wipe">すべて削除…</button></div></div>
-      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.6.0 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
+      <p class="muted mono" style="font-size:11px;text-align:center">TABIROGU v0.6.1 · 地図データ: 国土数値情報(dataofjapan/land), Natural Earth</p>
     </div>`;
     $('#s-name').onchange = async e => { Store.settings.bookName = e.target.value.trim() || 'ふたりの旅帳'; await Store.saveSettings(); $('#bookName').textContent = Store.settings.bookName; };
     $('#s-dev').onchange = async e => { Store.settings.deviceName = e.target.value.trim(); await Store.saveSettings(); };
@@ -711,7 +711,7 @@
           try {
             const r = await Store.importZip(pack, mode, p => { bar.firstElementChild.style.width = (p * 100) + '%'; });
             recalc(); close(); refresh(); $('#bookName').textContent = Store.settings.bookName;
-            toast(`旅 ${r.addedTrips}件追加・${r.updatedTrips}件更新、写真 ${r.addedPhotos}枚追加`);
+            toast(`旅 ${r.addedTrips}件追加・${r.updatedTrips}件更新、写真 ${r.addedPhotos}枚追加${r.removed ? `、削除の反映${r.removed}件` : ''}`);
             celebrate(Geo.diff(before, state.calc));
           } catch (e) { toast('読み込みに失敗しました：' + e.message); ev.target.disabled = false; }
         };

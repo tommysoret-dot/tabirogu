@@ -163,17 +163,29 @@
     const q = qrcode(0, 'L'); q.addData(text, 'Byte'); q.make();
     return q.createSvgTag({ cellSize: 4, margin: 3, scalable: true });
   }
-  function scanner(box, onCode) {
-    let stream = null, stopped = false;
+  /* camera kept alive from the first scan until the connection is settled:
+     iPhone Safari only reveals the device's real local address to WebRTC while the camera is in use */
+  function camera() {
+    let stream = null, pending = null;
+    return {
+      get() {
+        if (stream && stream.getVideoTracks().some(t => t.readyState === 'live')) return Promise.resolve(stream);
+        if (!pending) pending = navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(s => { stream = s; pending = null; return s; }, e => { pending = null; throw e; });
+        return pending;
+      },
+      stop() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
+    };
+  }
+  function scanner(box, onCode, cam) {
+    let stopped = false;
     const video = document.createElement('video'); video.setAttribute('playsinline', ''); video.muted = true; video.className = 'scan-video';
     const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
     box.innerHTML = ''; box.appendChild(video);
-    const stop = () => { stopped = true; if (stream) stream.getTracks().forEach(t => t.stop()); };
+    const stop = () => { stopped = true; try { video.pause(); video.srcObject = null; } catch (e) { } };
     (async () => {
       try {
         const jsQR = await loadJsQR();
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
-        video.srcObject = stream; await video.play();
+        video.srcObject = await cam.get(); await video.play();
         const tick = () => {
           if (stopped) return;
           if (video.videoWidth) {
@@ -190,14 +202,50 @@
     return stop;
   }
 
+  /* ---------- connection diagnostics ---------- */
+  function candSummary(sdp) {
+    const c = { 'IP': 0, 'mDNS': 0, '外部': 0, '中継': 0 };
+    (sdp || '').split('\r\n').filter(l => l.startsWith('a=candidate')).forEach(l => {
+      if (/ typ srflx/.test(l)) c['外部']++; else if (/ typ relay/.test(l)) c['中継']++; else if (/\.local /.test(l)) c['mDNS']++; else c['IP']++;
+    });
+    return Object.entries(c).filter(([, n]) => n).map(([k, n]) => `${k}${n}`).join(' ') || 'なし';
+  }
+  const STATE_JA = { new: '準備', checking: '経路を確認中', connected: '接続', completed: '接続', failed: '失敗', disconnected: '切断', closed: '終了' };
+  function diagText(pc) {
+    if (!pc) return '';
+    return `自分の経路候補：${candSummary(pc.localDescription && pc.localDescription.sdp)}\n相手の経路候補：${candSummary(pc.remoteDescription && pc.remoteDescription.sdp)}\n状態：${STATE_JA[pc.iceConnectionState] || pc.iceConnectionState}`;
+  }
+  function openWithin(pc, dcOrPromise, ms) {
+    return new Promise((res, rej) => {
+      let done = false;
+      const fail = (why) => { if (!done) { done = true; rej(new Error(why)); } };
+      const t = setTimeout(() => fail('時間内につながりませんでした'), ms);
+      pc.addEventListener('iceconnectionstatechange', () => { if (pc.iceConnectionState === 'failed') { clearTimeout(t); fail('通信経路が見つかりませんでした'); } });
+      Promise.resolve(dcOrPromise).then(dc => opened(dc)).then(dc => { if (!done) { done = true; clearTimeout(t); res(dc); } }, e => fail(e.message));
+    });
+  }
+
+  /* ---------- fallback: send everything as a file (AirDrop / LINE) ---------- */
+  async function sendFile() {
+    TB.UI.toast('ファイルを作成中…');
+    const blob = await Store.exportZip();
+    const d = new Date(); const name = `tabirogu_sync_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.zip`;
+    try {
+      const file = new File([blob], name, { type: 'application/zip' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: name }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    await TB.UI.saveFile(blob, name);
+  }
+
   /* ---------- UI ---------- */
   function open(role) {
-    let pc = null, stopScan = null, wake = null;
+    let pc = null, stopScan = null, wake = null, diagTimer = null;
+    const cam = camera();
     TB.UI.sheet(`<div class="stack sync-sheet"><h3>${role === 'host' ? '同期をはじめる' : '相手のQRを読む'}</h3><div id="sy-body" class="stack"></div>
       <p class="muted" style="margin:0;font-size:11px">データはふたりの端末の間で暗号化して直接やり取りします。どこにも保存されません。</p></div>`, async (el, close) => {
       const body = el.querySelector('#sy-body');
       const overlay = el.closest('.overlay');
-      const cleanup = () => { if (stopScan) stopScan(); try { wake && wake.release(); } catch (e) { } };
+      const cleanup = () => { if (stopScan) stopScan(); cam.stop(); clearInterval(diagTimer); try { wake && wake.release(); } catch (e) { } };
       overlay.addEventListener('click', e => { if (e.target === overlay) { cleanup(); if (pc && pc.connectionState !== 'connected') pc.close(); } });
       try { wake = await navigator.wakeLock.request('screen'); } catch (e) { }
       const showCode = async (code, title, next) => {
@@ -207,17 +255,33 @@
           <details><summary class="muted" style="font-size:13px">QRが使えないとき（コードをコピーしてLINEなどで送る）</summary>
             <div class="row" style="margin-top:8px"><button class="btn small" data-copy>コードをコピー</button></div>
             <textarea readonly class="code-box">${esc(code)}</textarea></details>
-          ${next || ''}`;
+          ${next || ''}<pre class="sy-diag" id="sy-diag"></pre>`;
         body.querySelector('[data-copy]').onclick = async () => { try { await navigator.clipboard.writeText(code); TB.UI.toast('コピーしました'); } catch (e) { const ta = body.querySelector('.code-box'); ta.select(); } };
       };
       const readCode = (title, onCode) => {
         body.innerHTML = `<p style="margin:0">${title}</p><div class="scan-box"></div>
           <details><summary class="muted" style="font-size:13px">コードを貼り付けて進む</summary><textarea class="code-box" id="sy-paste" placeholder="TBRG1:…"></textarea><button class="btn small" data-paste style="margin-top:6px">このコードで進む</button></details>`;
-        stopScan = scanner(body.querySelector('.scan-box'), onCode);
+        stopScan = scanner(body.querySelector('.scan-box'), onCode, cam);
         body.querySelector('[data-paste]').onclick = () => { const v = body.querySelector('#sy-paste').value; if (v.trim()) { if (stopScan) stopScan(); onCode(v.trim()); } };
       };
+      const liveDiag = () => { clearInterval(diagTimer); diagTimer = setInterval(() => { const d = body.querySelector('#sy-diag'); if (d) d.textContent = diagText(pc); }, 700); };
+      const failed = (msg) => {
+        const diag = diagText(pc);
+        cleanup(); try { pc && pc.close(); } catch (e) { }
+        body.innerHTML = `<p style="color:var(--stamp);margin:0"><b>${esc(msg)}</b></p>
+          <ul class="sy-help"><li>ふたりとも<b>同じWi-Fi</b>につないでから、もう一度お試しください（携帯回線どうしだとつながらないことがあります）。</li>
+          <li>カメラの許可を「許可しない」にしていると、つながりにくくなります。</li>
+          <li>ホテルや駅などの公衆Wi-Fiは、端末どうしの通信を止めていることがあります。そのときは「ファイルで送る」を使ってください。</li></ul>
+          <pre class="sy-diag">${esc(diag)}</pre>
+          <div class="row"><button class="btn primary" data-retry>もう一度</button><button class="btn" data-file>ファイルで送る（AirDrop・LINE）</button></div>
+          <p class="muted" style="margin:0;font-size:12px">ファイルを受け取った側は、設定 →「ZIPを読み込む」→「今の旅帳に追加」で取り込めます。削除した旅や写真も反映されます。</p>`;
+        body.querySelector('[data-retry]').onclick = () => { close(); open(role); };
+        body.querySelector('[data-file]').onclick = () => sendFile().catch(e => TB.UI.toast(e.message));
+      };
       const go = async (dc) => {
+        clearInterval(diagTimer);
         body.innerHTML = `<p style="margin:0" id="sy-who">つながりました。同期しています…</p><div class="progress"><i style="width:100%;opacity:.4"></i></div><p class="muted mono" id="sy-prog" style="margin:0;font-size:12px"></p>`;
+        cam.stop();
         try {
           const r = await run(dc, { progress: t => { const e = body.querySelector('#sy-prog'); if (e) e.textContent = t; }, peer: name => { const e = body.querySelector('#sy-who'); if (e) e.textContent = `${name || '相手の端末'}とつながりました。同期しています…`; } });
           const s = r.stats;
@@ -227,23 +291,23 @@
           body.querySelector('[data-ok]').onclick = () => { close(); TB.UI.celebrate(r.diff); };
           Store.settings.lastSync = Date.now(); await Store.saveSettings();
           setTimeout(() => { try { pc.close(); } catch (e) { } }, 1500);
-        } catch (e) { body.innerHTML = `<p style="color:var(--stamp)">${esc(e.message)}</p><button class="btn" data-ok>閉じる</button>`; body.querySelector('[data-ok]').onclick = close; }
+        } catch (e) { failed(e.message); return; }
         cleanup();
       };
       try {
         if (role === 'host') {
-          body.innerHTML = '<p class="muted">準備しています…<br>カメラの許可を求められたら「許可」を押してください（あとで相手のQRを読むのに使い、つながりやすくもなります）。</p>';
-          // On iPhone, Safari reveals the real local address only while the camera is allowed → better same-Wi-Fi connections
-          let warm = null; try { warm = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }); } catch (e) { }
+          body.innerHTML = '<p class="muted">準備しています…<br>カメラの許可を求められたら「許可」を押してください（相手のQRを読むのに使い、つながりやすくもなります）。</p>';
+          try { await cam.get(); } catch (e) { }
           const o = await makeOffer(); pc = o.pc;
-          if (warm) warm.getTracks().forEach(t => t.stop());
           await showCode(o.code, '① 相手のスマホで「相手のQRを読む」を押して、このQRを読んでもらってください。', '<button class="btn primary block" data-next>② 相手に出たQRを読む</button>');
           body.querySelector('[data-next]').onclick = () => readCode('② 相手の画面に出たQRをカメラで読んでください。', async code => {
-            try {
-              const ans = await decode(code); if (ans.type !== 'answer') throw new Error('相手側（読んだ側）に出たQRを読んでください');
-              body.innerHTML = '<p class="muted">接続しています…</p>';
-              await pc.setRemoteDescription(ans); go(await opened(o.dc));
-            } catch (e) { TB.UI.toast(e.message); }
+            let ans;
+            try { ans = await decode(code); if (ans.type !== 'answer') throw new Error('相手側（読んだ側）に出たQRを読んでください'); }
+            catch (e) { TB.UI.toast(e.message); return; }
+            body.innerHTML = '<p class="muted" style="margin:0">接続しています…（最大30秒）</p><pre class="sy-diag" id="sy-diag"></pre>';
+            liveDiag();
+            try { await pc.setRemoteDescription(ans); go(await openWithin(pc, o.dc, 30000)); }
+            catch (e) { failed(e.message); }
           });
         } else {
           readCode('相手のスマホに出たQRをカメラで読んでください。', async code => {
@@ -251,13 +315,14 @@
               body.innerHTML = '<p class="muted">準備しています…</p>';
               const a = await makeAnswer(code); pc = a.pc;
               await showCode(a.code, 'このQRを、相手のスマホで読んでもらってください。つながると自動で同期が始まります。');
-              const dc = await a.dcP; go(await opened(dc));
-            } catch (e) { body.innerHTML = `<p style="color:var(--stamp)">${esc(e.message)}</p>`; }
+              liveDiag();
+              go(await openWithin(pc, a.dcP, 90000));
+            } catch (e) { failed(e.message); }
           });
         }
-      } catch (e) { body.innerHTML = `<p style="color:var(--stamp)">${esc(e.message)}</p>`; }
+      } catch (e) { failed(e.message); }
     });
   }
 
-  TB.Sync = { open, encode, decode, makeOffer, makeAnswer, run, opened };
+  TB.Sync = { open, encode, decode, makeOffer, makeAnswer, run, opened, sendFile, diagText };
 })();

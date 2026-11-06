@@ -150,7 +150,7 @@
       const only = tripIds ? new Set(tripIds) : null;
       const trips = only ? this.trips.filter(t => only.has(t.id)) : this.trips;
       const photos = only ? this.photos.filter(p => only.has(p.tripId)) : this.photos;
-      const data = { format: 'tabriogu', version: 2, exportedAt: new Date().toISOString(), bookName: this.settings.bookName, covers: only ? {} : this.settings.covers, trips, photos };
+      const data = { format: 'tabriogu', version: 2, exportedAt: new Date().toISOString(), bookName: this.settings.bookName, covers: only ? {} : this.settings.covers, deleted: only ? {} : (this.settings.deleted || {}), trips, photos };
       zip.file('tabriogu.json', JSON.stringify(data, null, 1));
       const dir = zip.folder('photos');
       let i = 0;
@@ -175,7 +175,9 @@
       if (mode === 'replace') await this.clearAll();
       const byId = new Map(this.trips.map(t => [t.id, t]));
       let addedTrips = 0, updatedTrips = 0, addedPhotos = 0;
+      const myDel = this.settings.deleted || {};
       for (const t of data.trips || []) {
+        if (mode !== 'replace' && myDel['t:' + t.id] >= (t.updatedAt || 0)) continue; // deleted here after their last edit
         const cur = byId.get(t.id);
         if (!cur) { await put('trips', t); this.trips.push(t); addedTrips++; }
         else if ((t.updatedAt || 0) > (cur.updatedAt || 0)) { await put('trips', t); Object.assign(cur, t); updatedTrips++; }
@@ -185,7 +187,7 @@
       let i = 0;
       for (const p of list) {
         i++;
-        if (have.has(p.id)) continue;
+        if (have.has(p.id) || (mode !== 'replace' && myDel['p:' + p.id])) continue;
         const f = zip.file('photos/' + p.id + '.jpg'), th = zip.file('photos/' + p.id + '_t.jpg');
         if (!f) continue;
         const full = await f.async('blob');
@@ -194,10 +196,20 @@
         addedPhotos++;
         onProgress && onProgress(i / list.length);
       }
+      let removed = 0;
+      if (mode !== 'replace') { // deletions made on the other phone
+        this.settings.deleted = this.settings.deleted || {};
+        for (const [k, at] of Object.entries(data.deleted || {})) {
+          if (!this.settings.deleted[k]) this.settings.deleted[k] = at;
+          const id = k.slice(2);
+          if (k.startsWith('t:')) { const t = this.trips.find(x => x.id === id); if (t && (t.updatedAt || 0) <= at) { await this.deleteTrip(id); removed++; } }
+          else if (this.photos.some(x => x.id === id)) { await this.deletePhoto(id); removed++; }
+        }
+      } else this.settings.deleted = data.deleted || {};
       if (mode === 'replace') { this.settings.bookName = data.bookName || this.settings.bookName; this.settings.covers = data.covers || {}; }
       else this.settings.covers = Object.assign({}, data.covers || {}, this.settings.covers);
       await this.saveSettings();
-      return { addedTrips, updatedTrips, addedPhotos };
+      return { addedTrips, updatedTrips, addedPhotos, removed };
     }
   };
 
